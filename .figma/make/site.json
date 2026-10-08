@@ -1,0 +1,11 @@
+{
+  "title": "HerdPulse AI",
+  "description": "Precision livestock platform delivering AI-driven herd management and genetic tracking tools for sheep and goat farmers to optimize health and productivity.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

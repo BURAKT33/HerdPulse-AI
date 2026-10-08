@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-green-brand: #10b981;
+  --color-green-deep: #047857;
+  --color-ai-blue: #2563eb;
+  --color-sky-ai: #0ea5e9;
+  --color-slate-soft: #f8fafc;
+  --color-charcoal: #0f172a;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #0f172a;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #10b981;
+  color: #fff;
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 12px 40px -12px rgba(15, 23, 42, 0.25);
+}
+.glass-dark {
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes pulse-box {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5), 0 0 18px rgba(16, 185, 129, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0), 0 0 28px rgba(16, 185, 129, 0.8); }
+}
+.float { animation: floaty 6s ease-in-out infinite; }
+.float-slow { animation: floaty 8s ease-in-out infinite; animation-delay: -3s; }
+.bbox { animation: pulse-box 2.4s ease-in-out infinite; }
+.scanline { animation: scan 4s linear infinite alternate; }
