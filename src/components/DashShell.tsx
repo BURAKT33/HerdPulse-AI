@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { ChevronsUpDown, LogOut, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { BookOpen, ChevronsUpDown, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useAuth } from '../auth'
 import Logo from './Logo'
 
@@ -57,6 +57,8 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
   const [menuOpen, setMenuOpen] = useState(false)
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const onFarmer = pathname.startsWith('/app/farmer')
 
   const signOut = () => {
     logout()
@@ -75,15 +77,33 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
           {!collapsed && <button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" className="rounded-md p-1.5 hover:bg-white/10 hover:text-white"><PanelLeftClose size={17} /></button>}
         </div>
         {!collapsed && (
-          <div className="px-4 pt-4">
+          <div className="space-y-2 px-4 pt-4">
             <span className={`inline-block rounded-md px-2.5 py-1 text-[11px] font-bold ${badgeColor}`}>{badge}</span>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-white/5 p-1">
+              <Link
+                to="/app/farmer"
+                className={`flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-bold transition ${
+                  onFarmer ? 'bg-green-brand/20 text-green-brand' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <LayoutDashboard size={12} /> Farmer
+              </Link>
+              <Link
+                to="/app/herdbook"
+                className={`flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-bold transition ${
+                  !onFarmer ? 'bg-sky-ai/20 text-sky-ai' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <BookOpen size={12} /> Herd Book
+              </Link>
+            </div>
           </div>
         )}
         {collapsed && (
           <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" className="mx-auto mt-3 rounded-md p-2 hover:bg-white/10 hover:text-white"><PanelLeftOpen size={17} /></button>
         )}
         <nav className="mt-4 flex-1 space-y-1 overflow-y-auto px-3">
-          {nav.map((n, i) => (
+          {nav.map((n) => (
             <NavLink
               key={n.label}
               to={n.to}

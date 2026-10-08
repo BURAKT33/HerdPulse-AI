@@ -172,15 +172,27 @@ export function DashboardMock({ className = '' }: { className?: string }) {
   )
 }
 
-export function BBox({ top, left, w, h, label, conf }: { top: string; left: string; w: string; h: string; label: string; conf: string }) {
+export function BBox({
+  top, left, w, h, label, conf, compact = false,
+}: {
+  top: string; left: string; w: string; h: string; label: string; conf: string; compact?: boolean
+}) {
   return (
-    <div className="bbox absolute rounded-[4px] border-2 border-green-brand" style={{ top, left, width: w, height: h }}>
-      <span className="absolute -top-6 left-[-2px] whitespace-nowrap rounded-sm bg-green-brand px-1.5 py-0.5 font-mono text-[10px] font-medium text-charcoal">
+    <div
+      className={`bbox absolute rounded-[3px] border-green-brand ${compact ? 'border' : 'border-2'}`}
+      style={{ top, left, width: w, height: h }}
+    >
+      <span
+        className={`absolute left-[-1px] whitespace-nowrap rounded-sm bg-green-brand font-mono font-medium text-charcoal ${
+          compact ? '-top-4 px-1 py-px text-[8px]' : '-top-6 px-1.5 py-0.5 text-[10px]'
+        }`}
+      >
         {label} {conf}
       </span>
-      {['-left-1 -top-1', '-right-1 -top-1', '-left-1 -bottom-1', '-right-1 -bottom-1'].map((p) => (
-        <span key={p} className={`absolute h-2 w-2 bg-white ${p}`} />
-      ))}
+      {!compact &&
+        ['-left-1 -top-1', '-right-1 -top-1', '-left-1 -bottom-1', '-right-1 -bottom-1'].map((p) => (
+          <span key={p} className={`absolute h-2 w-2 bg-white ${p}`} />
+        ))}
     </div>
   )
 }

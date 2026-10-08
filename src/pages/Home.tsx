@@ -122,14 +122,37 @@ export default function Home() {
             </ul>
           </div>
           <div className="relative aspect-[5/4] overflow-hidden rounded-2xl border border-white/10 bg-slate-800 shadow-[0_0_80px_-20px_rgba(16,185,129,0.4)]">
-            <img src={IMG.sheepGreen} alt="Sheep scanned by computer vision" className="h-full w-full object-cover" />
+            <img src="/research-cv.jpg" alt="Sheep scanned by computer vision" className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-charcoal/25" />
             <div className="scanline absolute left-0 right-0 h-px bg-green-brand shadow-[0_0_20px_4px_rgba(16,185,129,0.7)]" />
-            <BBox top="34%" left="12%" w="24%" h="30%" label="SHEEP" conf="0.97" />
-            <BBox top="42%" left="44%" w="22%" h="28%" label="SHEEP · GRAZING" conf="0.94" />
-            <BBox top="28%" left="72%" w="20%" h="26%" label="SHEEP" conf="0.91" />
+            {[
+              { top: '58%', left: '0%', w: '22%', h: '18%', label: 'SHEEP', conf: '0.98', compact: false },
+              { top: '56%', left: '24%', w: '26%', h: '30%', label: 'SHEEP', conf: '0.97', compact: false },
+              { top: '56%', left: '56%', w: '23%', h: '22%', label: 'SHEEP', conf: '0.96', compact: false },
+              { top: '58%', left: '81%', w: '12%', h: '17%', label: 'SHEEP', conf: '0.94', compact: true },
+              { top: '58%', left: '92%', w: '8%', h: '16%', label: 'SHEEP', conf: '0.91', compact: true },
+              { top: '43%', left: '19%', w: '10%', h: '12%', label: 'SHEEP', conf: '0.94', compact: true },
+              { top: '42%', left: '29%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.90', compact: true },
+              { top: '44%', left: '39%', w: '10%', h: '12%', label: 'SHEEP', conf: '0.89', compact: true },
+              { top: '48%', left: '1%', w: '9%', h: '11%', label: 'SHEEP', conf: '0.93', compact: true },
+              { top: '48%', left: '10%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.92', compact: true },
+              { top: '48%', left: '20%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.91', compact: true },
+              { top: '47%', left: '30%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.90', compact: true },
+              { top: '49%', left: '40%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.88', compact: true },
+              { top: '52%', left: '5%', w: '11%', h: '12%', label: 'SHEEP', conf: '0.94', compact: true },
+              { top: '51%', left: '16%', w: '11%', h: '12%', label: 'SHEEP', conf: '0.93', compact: true },
+              { top: '50%', left: '27%', w: '11%', h: '12%', label: 'SHEEP', conf: '0.92', compact: true },
+              { top: '50%', left: '48%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.91', compact: true },
+              { top: '50%', left: '58%', w: '10%', h: '11%', label: 'SHEEP', conf: '0.90', compact: true },
+              { top: '52%', left: '68%', w: '10%', h: '12%', label: 'SHEEP', conf: '0.89', compact: true },
+              { top: '54%', left: '76%', w: '10%', h: '12%', label: 'SHEEP', conf: '0.88', compact: true },
+              { top: '53%', left: '36%', w: '11%', h: '12%', label: 'SHEEP', conf: '0.87', compact: true },
+              { top: '47%', left: '52%', w: '9%', h: '10%', label: 'SHEEP', conf: '0.86', compact: true },
+            ].map((b) => (
+              <BBox key={`${b.left}-${b.top}-${b.conf}`} {...b} />
+            ))}
             <div className="glass-dark absolute bottom-4 left-4 rounded-lg px-3 py-2 font-mono text-[11px] text-green-brand">
-              ● LIVE · 142 animals · 28 fps
+              ● LIVE · 22 animals detected · 28 fps
             </div>
           </div>
         </div>
