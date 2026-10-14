@@ -1,8 +1,8 @@
 /** Cloud Run / Google Frontend rejects bodies above ~32 MB. */
 export const MAX_UPLOAD_BYTES = 28 * 1024 * 1024
 const VIDEO_MAX_SIDE = 720
-const VIDEO_FPS = 30
-const VIDEO_BITRATE = 2_800_000
+const VIDEO_FPS = 25
+const VIDEO_BITRATE = 1_800_000
 const IMAGE_MAX_SIDE = 1280
 
 export function formatBytes(n: number) {
@@ -72,27 +72,49 @@ async function compressImage(file: File, opts: { signal?: AbortSignal } = {}): P
   return new File([blob], rename(file.name, '.jpg'), { type: 'image/jpeg' })
 }
 
-function pickRecorderMime() {
-  const candidates = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp8', 'video/webm']
-  return candidates.find((t) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) ?? ''
+function recorderMimes(): Array<string | undefined> {
+  const candidates: Array<string | undefined> = [
+    'video/webm;codecs=vp8',
+    'video/webm',
+    'video/mp4',
+    undefined,
+  ]
+  if (typeof MediaRecorder === 'undefined') return []
+  return candidates.filter((t) => t === undefined || MediaRecorder.isTypeSupported(t))
+}
+
+function captureCanvas(canvas: HTMLCanvasElement, fps: number) {
+  const node = canvas as HTMLCanvasElement & {
+    captureStream?: (n?: number) => MediaStream
+    webkitCaptureStream?: (n?: number) => MediaStream
+  }
+  const fn = node.captureStream ?? node.webkitCaptureStream
+  if (!fn) throw new Error('This browser cannot capture canvas video')
+  return fn.call(node, fps)
 }
 
 async function compressVideo(file: File, opts: { signal?: AbortSignal; onProgress?: CompressProgress } = {}): Promise<File> {
   throwIfAborted(opts.signal)
-  const mime = pickRecorderMime()
-  if (!mime || typeof MediaRecorder === 'undefined') {
-    throw new Error('This browser cannot compress video. Use a smaller MP4 (under 28 MB).')
+  const mimes = recorderMimes()
+  if (!mimes.length) {
+    throw new Error('This browser cannot compress video. Use a smaller MP4 (under 20 MB).')
   }
 
   const src = URL.createObjectURL(file)
   const video = document.createElement('video')
   video.muted = true
+  video.defaultMuted = true
   video.playsInline = true
+  video.setAttribute('playsinline', 'true')
+  video.setAttribute('webkit-playsinline', 'true')
   video.preload = 'auto'
+  video.crossOrigin = 'anonymous'
   video.src = src
+  video.style.cssText = 'position:fixed;left:-9999px;width:2px;height:2px;opacity:0'
+  document.body.appendChild(video)
 
   try {
-    await waitEvent(video, 'loadedmetadata', opts.signal)
+    await waitEvent(video, 'loadeddata', opts.signal)
     const vw = video.videoWidth || VIDEO_MAX_SIDE
     const vh = video.videoHeight || VIDEO_MAX_SIDE
     const scale = Math.min(1, VIDEO_MAX_SIDE / Math.max(vw, vh))
@@ -102,62 +124,113 @@ async function compressVideo(file: File, opts: { signal?: AbortSignal; onProgres
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: false })
     if (!ctx) throw new Error('Canvas unavailable')
 
-    const stream = canvas.captureStream(VIDEO_FPS)
-    const chunks: BlobPart[] = []
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE })
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data)
-    }
-
-    const stopped = new Promise<void>((resolve, reject) => {
-      rec.onstop = () => resolve()
-      rec.onerror = () => reject(new Error('Video compress failed'))
-    })
-
-    rec.start(200)
-
-    let raf = 0
-    const draw = () => {
-      ctx.drawImage(video, 0, 0, w, h)
-      if (!video.paused && !video.ended) raf = requestAnimationFrame(draw)
-    }
-
     video.currentTime = 0
-    video.playbackRate = 1
-    await video.play()
-    draw()
-
-    const duration = Number.isFinite(video.duration) ? video.duration : 0
-    const tick = window.setInterval(() => {
-      const t = video.currentTime || 0
-      opts.onProgress?.(
-        duration ? `Compressing ${t.toFixed(1)}s / ${duration.toFixed(1)}s · ${w}×${h} @ ${VIDEO_FPS}fps` : `Compressing ${w}×${h}`,
-      )
-    }, 400)
-
-    try {
-      await waitEvent(video, 'ended', opts.signal)
-    } finally {
-      window.clearInterval(tick)
-      cancelAnimationFrame(raf)
-    }
-
+    await waitEvent(video, 'seeked', opts.signal).catch(() => undefined)
     ctx.drawImage(video, 0, 0, w, h)
-    if (rec.state === 'recording') rec.stop()
-    await stopped
 
-    const ext = mime.includes('mp4') ? '.mp4' : '.webm'
-    const blob = new Blob(chunks, { type: mime.includes('mp4') ? 'video/mp4' : 'video/webm' })
-    if (blob.size < 1024) throw new Error('Compressed video was empty')
-    return new File([blob], rename(file.name, ext), { type: blob.type })
+    let last: Error | null = null
+    for (const mime of mimes) {
+      throwIfAborted(opts.signal)
+      opts.onProgress?.(`Compressing ${w}×${h} · ${mime ?? 'default encoder'}`)
+      try {
+        return await recordPass(video, canvas, ctx, w, h, mime, opts)
+      } catch (e) {
+        last = e instanceof Error ? e : new Error('Video compress failed')
+      }
+    }
+    throw last ?? new Error('Video compress failed')
   } finally {
     URL.revokeObjectURL(src)
+    video.pause()
     video.removeAttribute('src')
     video.load()
+    video.remove()
   }
+}
+
+async function recordPass(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  mime: string | undefined,
+  opts: { signal?: AbortSignal; onProgress?: CompressProgress },
+): Promise<File> {
+  const stream = captureCanvas(canvas, VIDEO_FPS)
+  const chunks: Blob[] = []
+  const options: MediaRecorderOptions = { videoBitsPerSecond: VIDEO_BITRATE }
+  if (mime) options.mimeType = mime
+
+  let rec: MediaRecorder
+  try {
+    rec = new MediaRecorder(stream, options)
+  } catch {
+    rec = new MediaRecorder(stream)
+  }
+
+  rec.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data)
+  }
+
+  const stopped = new Promise<void>((resolve, reject) => {
+    rec.onstop = () => resolve()
+    rec.onerror = (ev) => {
+      const err = (ev as Event & { error?: { name?: string; message?: string } }).error
+      reject(new Error(err?.message || err?.name || 'Video compress failed'))
+    }
+  })
+
+  video.pause()
+  video.currentTime = 0
+  await waitEvent(video, 'seeked', opts.signal).catch(() => undefined)
+  ctx.drawImage(video, 0, 0, w, h)
+
+  rec.start(250)
+  video.playbackRate = 1
+  try {
+    await video.play()
+  } catch {
+    stream.getTracks().forEach((t) => t.stop())
+    if (rec.state === 'recording') rec.stop()
+    throw new Error('Browser blocked video playback. Click Run detection again.')
+  }
+
+  let raf = 0
+  const draw = () => {
+    if (video.readyState >= 2) ctx.drawImage(video, 0, 0, w, h)
+    if (!video.paused && !video.ended) raf = requestAnimationFrame(draw)
+  }
+  draw()
+
+  const duration = Number.isFinite(video.duration) ? video.duration : 0
+  const tick = window.setInterval(() => {
+    const t = video.currentTime || 0
+    opts.onProgress?.(
+      duration ? `Compressing ${t.toFixed(1)}s / ${duration.toFixed(1)}s · ${w}×${h}` : `Compressing ${w}×${h}`,
+    )
+  }, 400)
+
+  try {
+    await waitEvent(video, 'ended', opts.signal)
+  } finally {
+    window.clearInterval(tick)
+    cancelAnimationFrame(raf)
+  }
+
+  ctx.drawImage(video, 0, 0, w, h)
+  if (rec.state === 'recording') rec.stop()
+  await stopped
+  stream.getTracks().forEach((t) => t.stop())
+
+  const type = rec.mimeType || mime || chunks[0]?.type || 'video/webm'
+  const blob = new Blob(chunks, { type: type.includes('mp4') ? 'video/mp4' : 'video/webm' })
+  if (blob.size < 1024) throw new Error('Compressed video was empty')
+  const ext = blob.type.includes('mp4') ? '.mp4' : '.webm'
+  return new File([blob], rename('sheep-clip', ext), { type: blob.type })
 }
 
 function rename(name: string, ext: string) {
@@ -173,6 +246,10 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) 
 
 function waitEvent(el: HTMLMediaElement, event: string, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
+    if (event === 'loadeddata' && el.readyState >= 2) {
+      resolve()
+      return
+    }
     const ok = () => {
       cleanup()
       resolve()
