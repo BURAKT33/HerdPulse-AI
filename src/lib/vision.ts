@@ -19,6 +19,7 @@ export type PredictResult = {
   result_id?: string
   media_url: string
   poster_url: string | null
+  csv_url: string | null
   width?: number
   height?: number
   elapsed_ms?: number
@@ -29,6 +30,7 @@ export type PredictResult = {
     frames_out?: number
     inferences?: number
     by_class?: Record<string, number>
+    by_class_dominant?: Record<string, number>
     seconds?: number
   }
   note?: string
@@ -89,6 +91,7 @@ export async function predictSheep(
   const raw = (await res.json()) as Record<string, unknown>
   const media_url = pickString(raw, ['media_url', 'mediaUrl', 'video_url', 'videoUrl', 'output_url', 'url'])
   const poster_url = pickString(raw, ['poster_url', 'posterUrl', 'thumbnail_url', 'thumbnailUrl', 'poster'])
+  const csv_url = pickString(raw, ['csv_url', 'csvUrl', 'timeline_url', 'timelineUrl'])
 
   if (!media_url) {
     throw new Error('API response missing media_url')
@@ -105,6 +108,7 @@ export async function predictSheep(
     result_id: typeof raw.result_id === 'string' ? raw.result_id : undefined,
     media_url,
     poster_url,
+    csv_url,
     width: typeof raw.width === 'number' ? raw.width : undefined,
     height: typeof raw.height === 'number' ? raw.height : undefined,
     elapsed_ms: typeof raw.elapsed_ms === 'number' ? raw.elapsed_ms : undefined,
@@ -113,4 +117,192 @@ export async function predictSheep(
     note: typeof raw.note === 'string' ? raw.note : undefined,
     raw,
   }
+}
+
+export type TimelinePoint = {
+  t: number
+  label: string
+  total: number
+  sit: number
+  stand: number
+  eat: number
+  [key: string]: number | string
+}
+
+export type Timeline = {
+  points: TimelinePoint[]
+  series: string[]
+}
+
+export type BehaviourShare = {
+  key: 'sit' | 'stand' | 'eat'
+  label: string
+  color: string
+  sum: number
+  avg: number
+  pct: number
+}
+
+const BEHAVIOUR_META: BehaviourShare[] = [
+  { key: 'sit', label: 'Sitting', color: '#F59E0B', sum: 0, avg: 0, pct: 0 },
+  { key: 'stand', label: 'Standing', color: '#10B981', sum: 0, avg: 0, pct: 0 },
+  { key: 'eat', label: 'Eating', color: '#0EA5E9', sum: 0, avg: 0, pct: 0 },
+]
+
+export function behaviourShares(timeline: Timeline | null, fallback?: Record<string, number>): BehaviourShare[] {
+  const points = timeline?.points ?? []
+  const n = points.length
+  const sums = { sit: 0, stand: 0, eat: 0 }
+
+  if (n) {
+    for (const p of points) {
+      sums.sit += Number(p.sit) || 0
+      sums.stand += Number(p.stand) || 0
+      sums.eat += Number(p.eat) || 0
+    }
+  } else if (fallback) {
+    sums.sit = Number(fallback.sit) || 0
+    sums.stand = Number(fallback.stand) || 0
+    sums.eat = Number(fallback.eat) || 0
+  }
+
+  const total = sums.sit + sums.stand + sums.eat
+  return BEHAVIOUR_META.map((m) => ({
+    ...m,
+    sum: sums[m.key],
+    avg: n ? sums[m.key] / n : sums[m.key],
+    pct: total > 0 ? (sums[m.key] / total) * 100 : 0,
+  }))
+}
+
+const TIME_KEYS = ['time_s', 'time', 't', 'seconds', 'second', 'timestamp', 'ts']
+const FRAME_KEYS = ['frame', 'frame_idx', 'frame_index', 'i']
+const CLASS_KEYS = ['class', 'label', 'behaviour', 'behavior', 'pose', 'dominant']
+const COUNT_KEYS = ['count', 'n', 'value', 'total']
+const KNOWN_BEHAVIOURS = ['sit', 'stand', 'eat']
+const BEHAVIOUR_ALIASES: Record<string, string> = {
+  sit: 'sit',
+  sitting: 'sit',
+  n_sit: 'sit',
+  stand: 'stand',
+  standing: 'stand',
+  n_stand: 'stand',
+  eat: 'eat',
+  eating: 'eat',
+  n_eat: 'eat',
+}
+
+export async function fetchTimeline(csvPath: string, signal?: AbortSignal): Promise<Timeline> {
+  const url = mediaUrl(csvPath)
+  if (!url) throw new Error('Missing csv_url')
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`)
+  return parseTimelineCsv(await res.text())
+}
+
+export function parseTimelineCsv(text: string): Timeline {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim().length > 0)
+  if (lines.length < 2) return { points: [], series: [] }
+
+  const headers = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
+  const rows = lines.slice(1).map((line) => {
+    const cells = splitCsvLine(line)
+    const rec: Record<string, string> = {}
+    headers.forEach((h, i) => {
+      rec[h] = cells[i] ?? ''
+    })
+    return rec
+  })
+
+  const timeKey = headers.find((h) => TIME_KEYS.includes(h)) ?? headers.find((h) => FRAME_KEYS.includes(h))
+  const classKey = headers.find((h) => CLASS_KEYS.includes(h))
+  const countKey = headers.find((h) => COUNT_KEYS.includes(h))
+  const wideCols = headers.filter((h) => BEHAVIOUR_ALIASES[h])
+
+  const byTime = new Map<number, TimelinePoint>()
+
+  const ensure = (t: number): TimelinePoint => {
+    let p = byTime.get(t)
+    if (!p) {
+      p = { t, label: formatTimeLabel(t, timeKey), total: 0, sit: 0, stand: 0, eat: 0 }
+      byTime.set(t, p)
+    }
+    return p
+  }
+
+  rows.forEach((rec, i) => {
+    const t = timeKey ? Number(rec[timeKey]) : i
+    if (!Number.isFinite(t)) return
+    const p = ensure(t)
+
+    if (wideCols.length) {
+      for (const k of wideCols) {
+        const n = Number(rec[k])
+        const dest = BEHAVIOUR_ALIASES[k]
+        if (dest && Number.isFinite(n)) p[dest] = n
+      }
+    } else if (classKey) {
+      const cls = rec[classKey].trim().toLowerCase()
+      const n = countKey ? Number(rec[countKey]) : 1
+      const val = Number.isFinite(n) ? n : 1
+      if (cls) p[cls] = (typeof p[cls] === 'number' ? p[cls] : 0) + val
+    } else if (countKey) {
+      const n = Number(rec[countKey])
+      if (Number.isFinite(n)) p.total = n
+    }
+
+    const sit = num(p.sit)
+    const stand = num(p.stand)
+    const eat = num(p.eat)
+    p.sit = sit
+    p.stand = stand
+    p.eat = eat
+    p.total = sit + stand + eat || num(p.total)
+  })
+
+  const points = [...byTime.values()].sort((a, b) => a.t - b.t)
+  const sampled = downsample(points, 360)
+  const series = ['sit', 'stand', 'eat'].filter((k) => sampled.some((p) => num(p[k]) > 0))
+  return { points: sampled, series: series.length ? series : ['total'] }
+}
+
+function num(v: number | string | undefined) {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatTimeLabel(t: number, timeKey: string | undefined) {
+  if (timeKey && FRAME_KEYS.includes(timeKey)) return `f${t}`
+  if (Number.isInteger(t)) return `${t}s`
+  return `${t.toFixed(1)}s`
+}
+
+function downsample(points: TimelinePoint[], max: number) {
+  if (points.length <= max) return points
+  const step = Math.ceil(points.length / max)
+  return points.filter((_, i) => i % step === 0 || i === points.length - 1)
+}
+
+function splitCsvLine(line: string) {
+  const out: string[] = []
+  let cur = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') {
+      if (quoted && line[i + 1] === '"') {
+        cur += '"'
+        i++
+      } else {
+        quoted = !quoted
+      }
+    } else if ((c === ',' || c === ';' || c === '\t') && !quoted) {
+      out.push(cur)
+      cur = ''
+    } else {
+      cur += c
+    }
+  }
+  out.push(cur)
+  return out
 }

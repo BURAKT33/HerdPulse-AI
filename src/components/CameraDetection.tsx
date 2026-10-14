@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
-import { FRAME_INTERVAL, mediaUrl, predictSheep, type PredictResult } from '../lib/vision'
+import { FRAME_INTERVAL, fetchTimeline, mediaUrl, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
+import SheepTimeline from './SheepTimeline'
 
 type Props = {
   onToast?: (msg: string) => void
@@ -17,6 +18,8 @@ export default function CameraDetection({ onToast }: Props) {
   const [result, setResult] = useState<PredictResult | null>(null)
   const [resultMedia, setResultMedia] = useState<string | null>(null)
   const [resultPoster, setResultPoster] = useState<string | null>(null)
+  const [csvUrl, setCsvUrl] = useState<string | null>(null)
+  const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [confidence, setConfidence] = useState(0.5)
   const [running, setRunning] = useState(false)
   const [waitSec, setWaitSec] = useState(0)
@@ -56,6 +59,8 @@ export default function CameraDetection({ onToast }: Props) {
     setResult(null)
     setResultMedia(null)
     setResultPoster(null)
+    setCsvUrl(null)
+    setTimeline(null)
     setError(null)
     setVideoFailed(false)
     setShowVideoPlayer(false)
@@ -76,6 +81,8 @@ export default function CameraDetection({ onToast }: Props) {
     setResult(null)
     setResultMedia(null)
     setResultPoster(null)
+    setCsvUrl(null)
+    setTimeline(null)
     setError(null)
     setVideoFailed(false)
     setShowVideoPlayer(false)
@@ -101,6 +108,8 @@ export default function CameraDetection({ onToast }: Props) {
     setResult(null)
     setResultMedia(null)
     setResultPoster(null)
+    setCsvUrl(null)
+    setTimeline(null)
     setVideoFailed(false)
     setShowVideoPlayer(false)
     setPhase('compressing')
@@ -120,6 +129,7 @@ export default function CameraDetection({ onToast }: Props) {
       })
       const mediaSrc = mediaUrl(data.media_url)
       const posterSrc = mediaUrl(data.poster_url)
+      const csvSrc = mediaUrl(data.csv_url)
 
       if (!mediaSrc) {
         throw new Error('API response missing media_url')
@@ -128,6 +138,15 @@ export default function CameraDetection({ onToast }: Props) {
       setResult(data)
       setResultMedia(mediaSrc)
       setResultPoster(posterSrc)
+      setCsvUrl(csvSrc)
+
+      if (data.csv_url) {
+        try {
+          setTimeline(await fetchTimeline(data.csv_url, ac.signal))
+        } catch {
+          setTimeline(null)
+        }
+      }
 
       // Videos: show annotated poster first (reliable). MP4 is optional player.
       if (data.kind === 'video') {
@@ -280,6 +299,17 @@ export default function CameraDetection({ onToast }: Props) {
                   <Download size={14} /> Download poster
                 </a>
               )}
+              {csvUrl && (
+                <a
+                  href={csvUrl}
+                  download="sheep_timeline.csv"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:border-green-brand"
+                >
+                  <Download size={14} /> Download CSV
+                </a>
+              )}
             </div>
           )}
         </Card>
@@ -393,6 +423,10 @@ export default function CameraDetection({ onToast }: Props) {
                 <dt className="shrink-0 text-slate-500">poster</dt>
                 <dd className="truncate font-mono text-[11px] text-charcoal">{resultPoster ? 'jpg' : '—'}</dd>
               </div>
+              <div className="flex justify-between gap-3">
+                <dt className="shrink-0 text-slate-500">csv_url</dt>
+                <dd className="truncate font-mono text-[11px] text-charcoal">{csvUrl ? 'set' : '—'}</dd>
+              </div>
               <div className="flex justify-between">
                 <dt className="text-slate-500">elapsed</dt>
                 <dd className="font-mono text-[11px] tabular-nums">
@@ -408,6 +442,14 @@ export default function CameraDetection({ onToast }: Props) {
           </Card>
         </div>
       </div>
+
+      {(timeline || csvUrl || result?.summary?.by_class_dominant) && (
+        <SheepTimeline
+          timeline={timeline}
+          csvUrl={csvUrl}
+          dominant={result?.summary?.by_class_dominant ?? result?.summary?.by_class}
+        />
+      )}
     </div>
   )
 }
