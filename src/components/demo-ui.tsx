@@ -15,7 +15,7 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
     return () => clearTimeout(t)
   }, [onDone])
   return createPortal(
-    <div className="fixed bottom-6 right-6 z-[100] flex max-w-sm items-start gap-3 rounded-xl border border-green-brand/30 bg-charcoal px-4 py-3 text-white shadow-2xl">
+    <div className="fixed bottom-4 left-4 right-4 z-[100] flex max-w-sm items-start gap-3 rounded-xl border border-green-brand/30 bg-charcoal px-4 py-3 text-white shadow-2xl sm:left-auto sm:right-6 sm:bottom-6">
       <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-green-brand" />
       <p className="text-[13px] font-semibold leading-snug">{message}</p>
       <button onClick={onDone} className="ml-1 shrink-0 text-slate-400 hover:text-white" aria-label="Dismiss">
@@ -50,7 +50,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <button className="absolute inset-0 bg-charcoal/50 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div className={`relative w-full rounded-2xl border border-slate-200 bg-white shadow-2xl ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
+      <div className={`relative max-h-[min(90dvh,40rem)] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-base font-extrabold text-charcoal">{title}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-50 hover:text-charcoal" aria-label="Close">

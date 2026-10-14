@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { BookOpen, ChevronsUpDown, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { BookOpen, ChevronsUpDown, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react'
 import { useAuth } from '../auth'
 import Logo from './Logo'
 
@@ -55,28 +55,62 @@ export function Toggle<T extends string>({ value, options, onChange }: { value: 
 export default function DashShell({ badge, badgeColor, nav, placeholder, profile, topRight, title, subtitle, children }: Props) {
   const [collapsed, setCollapsed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const { logout } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const onFarmer = pathname.startsWith('/app/farmer')
+  const slim = collapsed && !navOpen
 
   const signOut = () => {
     logout()
     navigate('/login', { replace: true })
   }
 
+  useEffect(() => {
+    setNavOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    document.body.style.overflow = navOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [navOpen])
+
   return (
-    <div className="flex h-screen bg-slate-soft text-charcoal">
-      <aside className={`flex shrink-0 flex-col bg-charcoal text-slate-400 transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-60'}`}>
-        <div className={`flex h-16 items-center border-b border-white/10 ${collapsed ? 'justify-center' : 'justify-between px-4'}`}>
-          {collapsed ? (
+    <div className="flex h-[100dvh] bg-slate-soft text-charcoal">
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-40 bg-charcoal/50 md:hidden"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-60 shrink-0 flex-col bg-charcoal text-slate-400 transition-transform duration-200 md:relative md:z-auto md:translate-x-0 ${
+          slim ? 'md:w-[72px]' : 'md:w-60'
+        } ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className={`flex h-16 items-center border-b border-white/10 ${slim ? 'justify-center' : 'justify-between px-4'}`}>
+          {slim ? (
             <Link to="/"><Logo light size={32} /></Link>
           ) : (
-            <Link to="/" className="flex flex-col gap-1"><Logo light size={26} /></Link>
+            <Link to="/" className="flex min-w-0 flex-col gap-1"><Logo light size={26} /></Link>
           )}
-          {!collapsed && <button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" className="rounded-md p-1.5 hover:bg-white/10 hover:text-white"><PanelLeftClose size={17} /></button>}
+          <div className="flex items-center gap-1">
+            {!slim && (
+              <button type="button" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" className="hidden rounded-md p-1.5 hover:bg-white/10 hover:text-white md:inline-flex">
+                <PanelLeftClose size={17} />
+              </button>
+            )}
+            <button type="button" onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded-md p-1.5 hover:bg-white/10 hover:text-white md:hidden">
+              <X size={18} />
+            </button>
+          </div>
         </div>
-        {!collapsed && (
+        {!slim && (
           <div className="space-y-2 px-4 pt-4">
             <span className={`inline-block rounded-md px-2.5 py-1 text-[11px] font-bold ${badgeColor}`}>{badge}</span>
             <div className="grid grid-cols-2 gap-1 rounded-lg bg-white/5 p-1">
@@ -99,8 +133,10 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
             </div>
           </div>
         )}
-        {collapsed && (
-          <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" className="mx-auto mt-3 rounded-md p-2 hover:bg-white/10 hover:text-white"><PanelLeftOpen size={17} /></button>
+        {slim && (
+          <button type="button" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" className="mx-auto mt-3 hidden rounded-md p-2 hover:bg-white/10 hover:text-white md:inline-flex">
+            <PanelLeftOpen size={17} />
+          </button>
         )}
         <nav className="mt-4 flex-1 space-y-1 overflow-y-auto px-3">
           {nav.map((n) => (
@@ -110,20 +146,21 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
               end
               title={n.label}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg py-2.5 text-[13px] font-semibold transition ${collapsed ? 'justify-center px-0' : 'px-3'} ${
+                `flex items-center gap-3 rounded-lg py-2.5 text-[13px] font-semibold transition ${slim ? 'justify-center px-0' : 'px-3'} ${
                   isActive ? 'bg-green-brand/15 text-green-brand' : 'hover:bg-white/5 hover:text-white'
                 }`
               }
             >
               <n.icon size={18} />
-              {!collapsed && n.label}
+              {!slim && n.label}
             </NavLink>
           ))}
         </nav>
         <div className="relative border-t border-white/10 p-3">
           {menuOpen && (
-            <div className={`absolute bottom-full mb-2 rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl ${collapsed ? 'left-1/2 w-40 -translate-x-1/2' : 'left-3 right-3'}`}>
+            <div className={`absolute bottom-full mb-2 rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl ${slim ? 'left-1/2 w-40 -translate-x-1/2' : 'left-3 right-3'}`}>
               <button
+                type="button"
                 onClick={signOut}
                 className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-slate-300 hover:bg-white/5 hover:text-white"
               >
@@ -132,11 +169,12 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
             </div>
           )}
           <button
+            type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className={`flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-white/5 ${collapsed ? 'justify-center' : ''}`}
+            className={`flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-white/5 ${slim ? 'justify-center' : ''}`}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-brand to-green-deep text-xs font-bold text-white">{profile.initials}</span>
-            {!collapsed && (
+            {!slim && (
               <>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-bold text-white">{profile.farm}</span>
@@ -150,16 +188,19 @@ export default function DashShell({ badge, badgeColor, nav, placeholder, profile
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-6">
-          <label className="relative w-full max-w-sm">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:h-16 sm:gap-4 sm:px-6">
+          <button type="button" onClick={() => { setCollapsed(false); setNavOpen(true) }} aria-label="Open menu" className="rounded-lg p-2 text-slate-600 hover:bg-slate-50 md:hidden">
+            <Menu size={20} />
+          </button>
+          <label className="relative min-w-0 flex-1 max-w-sm">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input placeholder={placeholder} className="w-full rounded-lg border border-slate-200 bg-slate-soft py-2.5 pl-10 pr-3 text-[13px] outline-none transition placeholder:text-slate-400 focus:border-green-brand focus:bg-white focus:ring-4 focus:ring-green-brand/15" />
+            <input placeholder={placeholder} className="w-full rounded-lg border border-slate-200 bg-slate-soft py-2.5 pl-10 pr-3 text-base outline-none transition placeholder:text-slate-400 focus:border-green-brand focus:bg-white focus:ring-4 focus:ring-green-brand/15 md:text-[13px]" />
           </label>
-          <div className="ml-auto flex items-center gap-3">{topRight}</div>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">{topRight}</div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6">
           <div className="mb-5">
-            <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
+            <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">{title}</h1>
             <p className="text-[13px] text-slate-500">{subtitle}</p>
           </div>
           {children}

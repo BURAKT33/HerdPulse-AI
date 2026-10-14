@@ -75,7 +75,7 @@ export default function Login() {
             <Logo />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.25)]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_30px_60px_-30px_rgba(15,23,42,0.25)] sm:p-8">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-brand/10 text-green-deep">
                 <Lock size={18} />

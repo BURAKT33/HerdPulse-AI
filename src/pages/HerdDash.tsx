@@ -201,7 +201,7 @@ export default function HerdDash() {
         topRight={
           <>
             <span className="hidden items-center gap-2 rounded-full bg-green-brand/10 px-3 py-1.5 text-xs font-bold text-green-deep xl:flex"><BadgeCheck size={15} /> ICAR &amp; EU 2016/1012 Certified</span>
-            <button onClick={downloadHerdBook} className="flex items-center gap-2 rounded-lg bg-green-brand px-4 py-2.5 text-[13px] font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep"><Download size={15} /> Generate Official Herd Book PDF / CSV</button>
+            <button onClick={downloadHerdBook} className="flex items-center gap-2 rounded-lg bg-green-brand px-2.5 py-2 text-[13px] font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep sm:px-4 sm:py-2.5"><Download size={15} /> <span className="hidden md:inline">Generate Official Herd Book PDF / CSV</span><span className="md:hidden">Export</span></button>
           </>
         }
       >

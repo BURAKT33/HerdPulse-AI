@@ -32,10 +32,10 @@ export default function Contact() {
   const [sent, setSent] = useState(false)
   return (
     <section className="grid min-h-[calc(100vh-72px)] lg:grid-cols-2">
-      <div className="px-6 py-16 sm:px-14 lg:px-20">
+      <div className="px-4 py-12 sm:px-14 sm:py-16 lg:px-20">
         <div className="mx-auto max-w-xl">
           <Eyebrow>Get in touch</Eyebrow>
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-charcoal sm:text-5xl">Let&apos;s talk about your herd.</h1>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-charcoal sm:text-4xl lg:text-5xl">Let&apos;s talk about your herd.</h1>
           <p className="mt-4 text-slate-600">Tell us about your farm and we&apos;ll show you how HerdPulse AI fits. We reply within one business day.</p>
 
           {sent ? (

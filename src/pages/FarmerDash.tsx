@@ -181,15 +181,15 @@ export default function FarmerDash() {
         <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-brand opacity-70" /><span className="relative h-2 w-2 rounded-full bg-green-brand" /></span>
         <Wifi size={13} /> IoT Hub Connected (Online)
       </span>
-      <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-green-brand px-3.5 py-2.5 text-[13px] font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep"><Plus size={15} /> Add Animal</button>
-      <button onClick={() => setTreatOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] font-bold transition hover:border-green-brand hover:text-green-deep"><Plus size={15} /> Record Treatment</button>
+      <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-green-brand px-2.5 py-2 text-[13px] font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep sm:px-3.5 sm:py-2.5"><Plus size={15} /> <span className="hidden sm:inline">Add Animal</span></button>
+      <button onClick={() => setTreatOpen(true)} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] font-bold transition hover:border-green-brand hover:text-green-deep sm:flex"><Plus size={15} /> Record Treatment</button>
       <div className="relative">
         <button onClick={() => setNotifsOpen(!notifsOpen)} className="relative rounded-lg border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50" aria-label="Notifications">
           <Bell size={17} />
           <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">4</span>
         </button>
         {notifsOpen && (
-          <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="absolute right-0 z-20 mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <p className="text-sm font-bold">Notifications</p>
               <button onClick={() => { setNotifsOpen(false); toast('All notifications marked as read') }} className="text-[11px] font-bold text-green-deep hover:underline">Mark all read</button>

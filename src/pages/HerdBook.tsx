@@ -71,7 +71,7 @@ export default function HerdBook() {
     <>
       {/* product header */}
       <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             <Logo size={28} />
             <span className="rounded-full bg-ai-blue/10 px-3 py-1 text-xs font-bold text-ai-blue">Digital Herd Book</span>
@@ -83,12 +83,12 @@ export default function HerdBook() {
         </div>
       </div>
 
-      <section className="relative overflow-hidden bg-slate-soft pb-20 pt-20">
+      <section className="relative overflow-hidden bg-slate-soft pb-14 pt-12 sm:pb-20 sm:pt-20">
         <div className="grid-bg absolute inset-0" />
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-sky-ai/15 blur-3xl" />
-        <div className="relative mx-auto max-w-5xl px-6 text-center">
+        <div className="relative mx-auto max-w-5xl px-4 text-center sm:px-6">
           <Eyebrow>Product 02</Eyebrow>
-          <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight text-charcoal sm:text-[52px]">
+          <h1 className="mt-5 text-3xl font-extrabold leading-[1.1] tracking-tight text-charcoal sm:text-5xl lg:text-[52px]">
             Everything you need for complete digital maintenance of genealogical herd books.
           </h1>
           <div className="mt-10 flex flex-wrap justify-center gap-2.5">
@@ -187,9 +187,9 @@ export default function HerdBook() {
       </section>
 
       <section className="px-6 pb-24">
-        <div className="relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-br from-green-brand via-green-deep to-charcoal px-8 py-24 text-center text-white">
+        <div className="relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-gradient-to-br from-green-brand via-green-deep to-charcoal px-5 py-14 text-center text-white sm:px-8 sm:py-24">
           <div className="grid-bg absolute inset-0 opacity-30" />
-          <h2 className="relative text-6xl font-extrabold tracking-tight sm:text-8xl">Start Today.</h2>
+          <h2 className="relative text-4xl font-extrabold tracking-tight sm:text-6xl lg:text-8xl">Start Today.</h2>
           <div className="relative mt-10 flex flex-wrap justify-center gap-3">
             <Btn to="/login?next=/app/herdbook" variant="light">Open Live Demo</Btn>
             <Btn to="/contact" variant="ghostLight">Contact</Btn>

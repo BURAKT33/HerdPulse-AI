@@ -19,25 +19,25 @@ const animals = [['GR-0412', 'Chios ewe', '3 yrs', 'Lactating'], ['GR-0388', 'Ch
 export default function DigitalFarmer() {
   return (
     <>
-      <section className="relative overflow-hidden bg-slate-soft pt-20">
+      <section className="relative overflow-hidden bg-slate-soft pt-12 sm:pt-20">
         <div className="grid-bg absolute inset-0" />
-        <div className="relative mx-auto max-w-5xl px-6 text-center">
+        <div className="relative mx-auto max-w-5xl px-4 text-center sm:px-6">
           <Eyebrow>Product 01 · Digital Farmer</Eyebrow>
-          <h1 className="mt-5 text-5xl font-extrabold leading-[1.05] tracking-tight text-charcoal sm:text-6xl">
+          <h1 className="mt-5 text-3xl font-extrabold leading-[1.1] tracking-tight text-charcoal sm:text-5xl lg:text-6xl">
             Digital Farmer: Your <span className="bg-gradient-to-r from-green-brand to-green-deep bg-clip-text text-transparent">24/7</span> digital farm partner.
           </h1>
-          <div className="mt-8 flex justify-center gap-3">
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Btn to="/login?next=/app/farmer">Open Live Demo</Btn>
             <Btn to="/digital-herd-book" variant="outline">See Digital Herd Book</Btn>
           </div>
         </div>
-        <div className="relative mx-auto mt-16 max-w-6xl px-6">
+        <div className="relative mx-auto mt-10 max-w-6xl overflow-x-clip px-4 sm:mt-16 sm:px-6">
           <div className="absolute inset-x-6 -bottom-0 top-24 overflow-hidden rounded-t-3xl bg-green-deep">
             <img src={IMG.pasture} alt="Sheep on a green pasture" className="h-full w-full object-cover opacity-70" />
           </div>
           <div className="relative px-4 pt-14 sm:px-12">
             <DashboardMock className="rounded-b-none" />
-            <div className="glass float absolute -left-2 top-4 flex items-center gap-3 rounded-xl p-3 sm:left-2">
+            <div className="glass float absolute -left-2 top-4 hidden items-center gap-3 rounded-xl p-3 sm:left-2 sm:flex">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-white"><Bell size={17} /></span>
               <div><p className="text-xs font-bold text-charcoal">New alert</p><p className="text-[11px] text-slate-600">Ewe #0412 · temperature ↑</p></div>
             </div>
@@ -45,8 +45,8 @@ export default function DigitalFarmer() {
         </div>
       </section>
 
-      <section className="bg-white py-24">
-        <div className="mx-auto max-w-7xl space-y-28 px-6">
+      <section className="bg-white py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl space-y-16 px-4 sm:space-y-28 sm:px-6">
           <Block
             eyebrow="Herd management"
             title="Know every animal. Manage every group."
@@ -116,10 +116,10 @@ export default function DigitalFarmer() {
         </div>
       </section>
 
-      <section className="bg-charcoal py-24 text-white">
-        <div className="mx-auto max-w-6xl px-6 text-center">
+      <section className="bg-charcoal py-16 text-white sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
           <Eyebrow light>Shared access</Eyebrow>
-          <h2 className="mx-auto mt-4 max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">Farmer, Vet &amp; advisor shared access from any device, anywhere.</h2>
+          <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">Farmer, Vet &amp; advisor shared access from any device, anywhere.</h2>
           <div className="mt-16 flex items-end justify-center gap-4 sm:gap-8">
             <div className="hidden w-[52%] sm:block"><DashboardMock /></div>
             <div className="w-40 shrink-0 rounded-2xl border-[6px] border-slate-700 bg-slate-soft p-3 text-left sm:w-52">

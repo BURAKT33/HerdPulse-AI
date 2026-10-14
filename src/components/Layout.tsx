@@ -19,6 +19,13 @@ export default function Layout() {
   }, [pathname])
 
   useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [open])
+
+  useEffect(() => {
     if (!demoOpen) return
     const onDoc = (e: MouseEvent) => {
       if (!demoRef.current?.contains(e.target as Node)) setDemoOpen(false)
@@ -31,9 +38,9 @@ export default function Layout() {
     `text-sm font-semibold transition-colors hover:text-green-deep ${isActive ? 'text-green-deep' : 'text-slate-700'}`
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen overflow-x-clip bg-white">
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4 px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:h-[72px] sm:gap-4 sm:px-6">
           <Link to="/" aria-label="HerdPulse AI home" className="min-w-0">
             <Logo />
           </Link>
@@ -109,8 +116,8 @@ export default function Layout() {
                 </Link>
               )}
             </div>
-            <button className="lg:hidden" onClick={() => setOpen(!open)} aria-label="Menu">
-              {open ? <X /> : <Menu />}
+            <button className="rounded-lg p-2 text-charcoal lg:hidden" onClick={() => setOpen(!open)} aria-label="Menu">
+              {open ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
@@ -139,7 +146,7 @@ export default function Layout() {
       </main>
 
       <footer className="bg-charcoal text-slate-400">
-        <div className="mx-auto grid max-w-7xl gap-10 px-6 py-16 md:grid-cols-[1.5fr_1fr_1fr]">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-[1.5fr_1fr_1fr]">
           <div>
             <Logo light />
             <p className="mt-5 max-w-sm text-sm leading-relaxed">

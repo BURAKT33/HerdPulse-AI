@@ -290,7 +290,7 @@ export default function CameraDetection({ onToast }: Props) {
             }
           />
           <div
-            className="relative mx-5 mb-5 min-h-[320px] overflow-hidden rounded-xl bg-charcoal sm:aspect-[9/16] sm:max-h-[70vh] lg:aspect-video lg:max-h-none"
+            className="relative mx-3 mb-4 min-h-[220px] overflow-hidden rounded-xl bg-charcoal aspect-video sm:mx-5 sm:mb-5 sm:min-h-[320px]"
             onDragOver={(e) => {
               e.preventDefault()
               e.dataTransfer.dropEffect = 'copy'
@@ -369,7 +369,7 @@ export default function CameraDetection({ onToast }: Props) {
             )}
           </div>
 
-          <div className="mx-5 mb-5">
+          <div className="mx-3 mb-4 sm:mx-5 sm:mb-5">
             <p className="mb-2 text-xs font-bold text-slate-500">Sample barn clips · click to analyse</p>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
               {SAMPLES.map((s) => (

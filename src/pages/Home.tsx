@@ -24,41 +24,41 @@ export default function Home() {
       {/* HERO */}
       <section className="relative overflow-hidden bg-slate-soft">
         <div className="grid-bg absolute inset-0" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-2 lg:gap-12 lg:py-24">
           <div>
             <Eyebrow>Precision livestock technology</Eyebrow>
-            <h1 className="mt-5 text-[44px] font-extrabold leading-[1.04] tracking-tight text-charcoal sm:text-6xl">
+            <h1 className="mt-5 text-3xl font-extrabold leading-[1.08] tracking-tight text-charcoal sm:text-5xl lg:text-6xl">
               The <span className="bg-gradient-to-r from-green-brand to-green-deep bg-clip-text text-transparent">AI Brain</span> of Sheep &amp; Goat Farms
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:mt-6 sm:text-lg">
               Precision livestock technology for sheep and goat farmers — smarter decisions, healthier herds, more sustainable operations.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap gap-3 sm:mt-9">
               <Btn to="/digital-farmer" variant="outline">Our Products</Btn>
               <Btn to="/contact">Get in Touch</Btn>
             </div>
-            <div className="mt-12 flex gap-10 border-t border-slate-200 pt-6">
+            <div className="mt-10 grid grid-cols-3 gap-3 border-t border-slate-200 pt-6 sm:mt-12 sm:gap-6">
               {[['1,200+', 'animals per farm tracked'], ['−32%', 'faster disease detection'], ['24/7', 'digital farm partner']].map(([a, b]) => (
                 <div key={a}>
-                  <p className="text-2xl font-extrabold text-charcoal">{a}</p>
-                  <p className="max-w-[110px] text-xs text-slate-500">{b}</p>
+                  <p className="text-xl font-extrabold text-charcoal sm:text-2xl">{a}</p>
+                  <p className="text-[11px] leading-snug text-slate-500 sm:text-xs">{b}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="relative h-[560px] sm:h-[620px]">
-            <div className="absolute inset-y-0 right-0 w-[88%] overflow-hidden rounded-3xl bg-green-deep shadow-2xl">
+          <div className="relative h-64 overflow-hidden rounded-3xl sm:h-80 lg:h-[620px] lg:overflow-visible">
+            <div className="absolute inset-0 overflow-hidden rounded-3xl bg-green-deep shadow-2xl lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[88%]">
               <img src={IMG.flock} alt="Flock of sheep grazing on a modern green farm" className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
             </div>
-            <PhoneApp className="float absolute left-0 top-1/2 -translate-y-1/2 sm:left-[4%]" />
-            <div className="glass float-slow absolute right-0 top-8 w-44 rounded-xl p-3.5">
+            <PhoneApp className="float absolute left-0 top-1/2 hidden -translate-y-1/2 lg:block lg:left-[4%]" />
+            <div className="glass float-slow absolute right-3 top-4 hidden w-44 rounded-xl p-3.5 sm:block lg:right-0 lg:top-8">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Herd health score</p>
               <p className="text-2xl font-extrabold text-charcoal">94<span className="text-sm text-green-deep"> /100</span></p>
               <Spark color="#10B981" height={44} />
             </div>
-            <div className="glass float absolute bottom-10 right-2 flex items-center gap-3 rounded-xl p-3.5">
+            <div className="glass float absolute bottom-4 right-3 hidden items-center gap-3 rounded-xl p-3.5 sm:flex lg:bottom-10 lg:right-2">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ai-blue text-white"><BrainCircuit size={18} /></span>
               <div>
                 <p className="text-xs font-bold text-charcoal">AI detected</p>
@@ -70,11 +70,11 @@ export default function Home() {
       </section>
 
       {/* PRODUCTS */}
-      <section className="bg-white py-24">
-        <div className="mx-auto max-w-7xl px-6">
+      <section className="bg-white py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>What we build</Eyebrow>
-            <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-charcoal sm:text-5xl">Purpose-built for small ruminant farming.</h2>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-charcoal sm:text-4xl lg:text-5xl">Purpose-built for small ruminant farming.</h2>
             <p className="mt-5 text-lg text-slate-600">Not adapted from cattle software. Designed from the ground up for sheep and goat operations.</p>
           </div>
           <div className="mt-14 grid gap-6 lg:grid-cols-2">
@@ -102,12 +102,12 @@ export default function Home() {
       </section>
 
       {/* RESEARCH */}
-      <section id="research" className="relative overflow-hidden bg-charcoal py-24 text-white">
+      <section id="research" className="relative overflow-hidden bg-charcoal py-16 text-white sm:py-24">
         <div className="absolute -left-40 top-0 h-96 w-96 rounded-full bg-green-brand/10 blur-3xl" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
           <div>
             <Eyebrow light>Research &amp; technology</Eyebrow>
-            <h2 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">Where Research Meets the Farm</h2>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">Where Research Meets the Farm</h2>
             <p className="mt-5 max-w-md text-slate-400">Every model we ship is trained and validated on real sheep and goat farms.</p>
             <ul className="mt-10 space-y-3">
               {research.map((r) => (
@@ -159,11 +159,11 @@ export default function Home() {
       </section>
 
       {/* ABOUT */}
-      <section id="about" className="bg-slate-soft py-24">
-        <div className="mx-auto max-w-7xl px-6">
+      <section id="about" className="bg-slate-soft py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>About HerdPulse AI</Eyebrow>
-            <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-charcoal sm:text-5xl">Built by farmers&apos; partners, powered by science.</h2>
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-charcoal sm:text-4xl lg:text-5xl">Built by farmers&apos; partners, powered by science.</h2>
           </div>
           <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {about.map((a) => (
