@@ -213,43 +213,68 @@ export function behaviourShares(timeline: Timeline | null, fallback?: Record<str
   const n = points.length
   const sums = { sit: 0, stand: 0, eat: 0 }
 
-  if (n) {
+  for (const p of points) {
+    sums.sit += Number(p.sit) || 0
+    sums.stand += Number(p.stand) || 0
+    sums.eat += Number(p.eat) || 0
+  }
+
+  if (sums.sit + sums.stand + sums.eat === 0 && n) {
     for (const p of points) {
-      sums.sit += Number(p.sit) || 0
-      sums.stand += Number(p.stand) || 0
-      sums.eat += Number(p.eat) || 0
+      const sit = Number(p.sit) || 0
+      const stand = Number(p.stand) || 0
+      const eat = Number(p.eat) || 0
+      const max = Math.max(sit, stand, eat)
+      if (max <= 0) continue
+      if (sit === max) sums.sit += 1
+      else if (stand === max) sums.stand += 1
+      else sums.eat += 1
     }
-  } else if (fallback) {
-    sums.sit = Number(fallback.sit) || 0
-    sums.stand = Number(fallback.stand) || 0
-    sums.eat = Number(fallback.eat) || 0
+  }
+
+  if (sums.sit + sums.stand + sums.eat === 0) {
+    const fb = normalizeCountMap(fallback)
+    sums.sit = fb.sit
+    sums.stand = fb.stand
+    sums.eat = fb.eat
   }
 
   const total = sums.sit + sums.stand + sums.eat
+  const denom = n || 1
   return BEHAVIOUR_META.map((m) => ({
     ...m,
     sum: sums[m.key],
-    avg: n ? sums[m.key] / n : sums[m.key],
+    avg: sums[m.key] / denom,
     pct: total > 0 ? (sums[m.key] / total) * 100 : 0,
   }))
 }
 
+function normalizeCountMap(obj?: Record<string, number>) {
+  const out = { sit: 0, stand: 0, eat: 0 }
+  if (!obj) return out
+  for (const [key, value] of Object.entries(obj)) {
+    const dest = normalizeBehaviour(key)
+    const n = Number(value)
+    if (dest && Number.isFinite(n)) out[dest] += n
+  }
+  return out
+}
+
+function normalizeBehaviour(raw: string): 'sit' | 'stand' | 'eat' | null {
+  const s = raw.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (s === 'sit' || s === 'sitting' || s === 'n_sit' || s.includes('otur')) return 'sit'
+  if (s === 'stand' || s === 'standing' || s === 'n_stand' || s.includes('ayak')) return 'stand'
+  if (s === 'eat' || s === 'eating' || s === 'n_eat' || s.includes('feed') || s.includes('yem')) return 'eat'
+  if (s.includes('sit') && !s.includes('stand')) return 'sit'
+  if (s.includes('stand')) return 'stand'
+  if (s.includes('eat')) return 'eat'
+  return null
+}
+
 const TIME_KEYS = ['time_s', 'time', 't', 'seconds', 'second', 'timestamp', 'ts']
 const FRAME_KEYS = ['frame', 'frame_idx', 'frame_index', 'i']
-const CLASS_KEYS = ['class', 'label', 'behaviour', 'behavior', 'pose', 'dominant']
+const CLASS_KEYS = ['class', 'behaviour', 'behavior', 'pose', 'dominant', 'pred', 'prediction', 'action']
 const COUNT_KEYS = ['count', 'n', 'value', 'total']
-const KNOWN_BEHAVIOURS = ['sit', 'stand', 'eat']
-const BEHAVIOUR_ALIASES: Record<string, string> = {
-  sit: 'sit',
-  sitting: 'sit',
-  n_sit: 'sit',
-  stand: 'stand',
-  standing: 'stand',
-  n_stand: 'stand',
-  eat: 'eat',
-  eating: 'eat',
-  n_eat: 'eat',
-}
 
 export async function fetchTimeline(csvPath: string, signal?: AbortSignal): Promise<Timeline> {
   const blob = await fetchResultBlob(csvPath, signal)
@@ -273,7 +298,7 @@ export function parseTimelineCsv(text: string): Timeline {
   const timeKey = headers.find((h) => TIME_KEYS.includes(h)) ?? headers.find((h) => FRAME_KEYS.includes(h))
   const classKey = headers.find((h) => CLASS_KEYS.includes(h))
   const countKey = headers.find((h) => COUNT_KEYS.includes(h))
-  const wideCols = headers.filter((h) => BEHAVIOUR_ALIASES[h])
+  const wideCols = headers.filter((h) => normalizeBehaviour(h))
 
   const byTime = new Map<number, TimelinePoint>()
 
@@ -294,14 +319,14 @@ export function parseTimelineCsv(text: string): Timeline {
     if (wideCols.length) {
       for (const k of wideCols) {
         const n = Number(rec[k])
-        const dest = BEHAVIOUR_ALIASES[k]
+        const dest = normalizeBehaviour(k)
         if (dest && Number.isFinite(n)) p[dest] = n
       }
     } else if (classKey) {
-      const cls = rec[classKey].trim().toLowerCase()
+      const dest = normalizeBehaviour(rec[classKey] ?? '')
       const n = countKey ? Number(rec[countKey]) : 1
       const val = Number.isFinite(n) ? n : 1
-      if (cls) p[cls] = (typeof p[cls] === 'number' ? p[cls] : 0) + val
+      if (dest) p[dest] = (Number(p[dest]) || 0) + val
     } else if (countKey) {
       const n = Number(rec[countKey])
       if (Number.isFinite(n)) p.total = n

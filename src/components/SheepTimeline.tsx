@@ -22,12 +22,14 @@ export default function SheepTimeline({ timeline, csvUrl, dominant }: Props) {
   const keys = timeline?.series?.length ? timeline.series : ['sit', 'stand', 'eat']
   const lines = SERIES.filter((s) => keys.includes(s.key))
   const shares = behaviourShares(timeline, dominant)
-  const pieData = shares.filter((s) => s.sum > 0)
+  const pieData = shares.filter((s) => s.pct > 0 || s.sum > 0)
+  const chartData = pieData.length ? pieData : shares
   const top = [...shares].sort((a, b) => b.pct - a.pct)[0]
   const nFrames = timeline?.points.length ?? 0
+  const hasPie = shares.some((s) => s.sum > 0)
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.85fr)]">
       <Card className="overflow-hidden">
         <CardHead
           title="Behaviour timeline"
@@ -71,23 +73,23 @@ export default function SheepTimeline({ timeline, csvUrl, dominant }: Props) {
 
       <Card className="overflow-hidden">
         <CardHead
-          title="Time spent by behaviour"
-          sub={nFrames ? `Share of animal-time across ${nFrames} samples` : 'From API class summary'}
+          title="Average time by behaviour"
+          sub={nFrames ? `Sit / stand / eat share across ${nFrames} samples` : 'From detection summary'}
         />
-        {pieData.length > 0 ? (
-          <div className="flex h-[280px] items-center px-5 pb-4">
-            <div className="relative h-full w-1/2">
+        {hasPie ? (
+          <div className="flex min-h-[280px] flex-col items-center gap-4 px-5 pb-5 sm:flex-row">
+            <div className="relative h-[220px] w-full max-w-[220px] shrink-0">
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={pieData} dataKey="sum" nameKey="label" innerRadius="62%" outerRadius="88%" paddingAngle={3} strokeWidth={0}>
-                    {pieData.map((s) => (
+                  <Pie data={chartData} dataKey="sum" nameKey="label" innerRadius="58%" outerRadius="88%" paddingAngle={3} strokeWidth={0}>
+                    {chartData.map((s) => (
                       <Cell key={s.key} fill={s.color} />
                     ))}
                   </Pie>
                   <Tooltip
                     formatter={(value, name, item) => {
                       const pct = (item?.payload as { pct?: number } | undefined)?.pct
-                      return [`${Number(value).toFixed(0)} · ${pct?.toFixed(0) ?? 0}%`, String(name)]
+                      return [`${pct?.toFixed(0) ?? 0}%`, String(name)]
                     }}
                     contentStyle={{ borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 12 }}
                   />
@@ -96,11 +98,11 @@ export default function SheepTimeline({ timeline, csvUrl, dominant }: Props) {
               {top && top.pct > 0 && (
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-2xl font-extrabold tabular-nums">{top.pct.toFixed(0)}%</span>
-                  <span className="text-[11px] capitalize text-slate-500">{top.label.toLowerCase()}</span>
+                  <span className="text-[11px] text-slate-500">{top.label}</span>
                 </div>
               )}
             </div>
-            <ul className="w-1/2 space-y-4">
+            <ul className="w-full space-y-3">
               {shares.map((s) => (
                 <li key={s.key} className="text-[13px]">
                   <div className="flex items-center gap-3">
@@ -109,14 +111,14 @@ export default function SheepTimeline({ timeline, csvUrl, dominant }: Props) {
                     <span className="tabular-nums font-bold">{s.pct.toFixed(0)}%</span>
                   </div>
                   <p className="mt-0.5 pl-6 text-[11px] text-slate-500">
-                    avg {s.avg.toFixed(1)} / frame
+                    {s.avg.toFixed(2)} avg / frame · {s.sum.toFixed(0)} total
                   </p>
                 </li>
               ))}
             </ul>
           </div>
         ) : (
-          <p className="px-5 pb-5 text-xs text-slate-500">Run a video detection to estimate sitting / standing / eating share.</p>
+          <p className="px-5 pb-5 text-xs text-slate-500">No sit / stand / eat totals in the CSV yet. Re-run video detection after the API writes class columns.</p>
         )}
       </Card>
     </div>

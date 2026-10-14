@@ -480,7 +480,7 @@ export default function CameraDetection({ onToast }: Props) {
         <SheepTimeline
           timeline={timeline}
           csvUrl={csvUrl}
-          dominant={result?.summary?.by_class_dominant ?? result?.summary?.by_class}
+          dominant={{ ...result?.summary?.by_class, ...result?.summary?.by_class_dominant }}
         />
       )}
     </div>
