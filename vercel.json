@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/sheep-api/:path*",
+      "destination": "https://snn-sheep-api-2txzd5xoia-ew.a.run.app/:path*"
+    },
+    {
+      "source": "/((?!sheep-api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

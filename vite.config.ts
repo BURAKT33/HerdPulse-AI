@@ -34,6 +34,16 @@ react(),
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
+      proxy: {
+        '/sheep-api': {
+          target: 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/sheep-api/, ''),
+          timeout: 600_000,
+          proxyTimeout: 600_000,
+        },
+      },
       watch: {
         ignored: [
           '**/.figma/**',
@@ -43,6 +53,16 @@ react(),
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      proxy: {
+        '/sheep-api': {
+          target: 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/sheep-api/, ''),
+          timeout: 600_000,
+          proxyTimeout: 600_000,
+        },
+      },
     },
   }
 })

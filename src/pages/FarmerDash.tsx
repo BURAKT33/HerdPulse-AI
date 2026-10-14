@@ -2,15 +2,17 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { Area, AreaChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  Activity, Baby, Bell, CalendarHeart, Cpu, Droplets, Gauge, HeartPulse, LayoutDashboard, Mail, PawPrint, Plus, Settings, Stethoscope, Syringe, Thermometer, TrendingDown, TrendingUp, Users, Wifi, Sparkles, Milk, AlertTriangle, Shield, UserPlus, Trash2, Check, X,
+  Activity, Baby, Bell, CalendarHeart, Camera, Cpu, Droplets, Gauge, HeartPulse, LayoutDashboard, Mail, PawPrint, Plus, Settings, Stethoscope, Syringe, Thermometer, TrendingDown, TrendingUp, Users, Wifi, Sparkles, Milk, AlertTriangle, Shield, UserPlus, Trash2, Check, X,
 } from 'lucide-react'
 import DashShell, { Card, CardHead, Toggle } from '../components/DashShell'
 import type { NavItem } from '../components/DashShell'
+import CameraDetection from '../components/CameraDetection'
 import { Field, FormActions, Modal, inputCls, useToast } from '../components/demo-ui'
 
 const nav: NavItem[] = [
   { to: '/app/farmer', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/app/farmer/herd', label: 'Herd & Health', icon: PawPrint },
+  { to: '/app/farmer/camera', label: 'Camera Detection', icon: Camera },
   { to: '/app/farmer/milk', label: 'Milk & Production', icon: Milk },
   { to: '/app/farmer/breeding', label: 'Breeding Calendar', icon: CalendarHeart },
   { to: '/app/farmer/iot', label: 'IoT & Sensors', icon: Cpu },
@@ -67,6 +69,7 @@ const statusTone: Record<string, string> = {
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '': { title: 'Good morning, Nikos', subtitle: 'Thursday, 8 October 2026 · Green Pastures Farm #4 · Chios & Skopelos flocks' },
   herd: { title: 'Herd & Health', subtitle: 'Animal registry, groups, and live health signals' },
+  camera: { title: 'Camera Detection', subtitle: 'Upload → compress if over 32 MB → POST /predict' },
   milk: { title: 'Milk & Production', subtitle: 'Per-animal and herd yield analytics' },
   breeding: { title: 'Breeding Calendar', subtitle: 'Matings, births, and health schedule · October 2026' },
   iot: { title: 'IoT & Sensors', subtitle: 'Barn environment, wearables, and milking machines' },
@@ -381,6 +384,8 @@ export default function FarmerDash() {
             </div>
           </>
         )}
+
+        {section === 'camera' && <CameraDetection onToast={toast} />}
 
         {section === 'herd' && (
           <Card>
