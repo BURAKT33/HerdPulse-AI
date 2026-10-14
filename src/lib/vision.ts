@@ -61,11 +61,16 @@ function sleep(ms: number) {
 }
 
 /** Cloud Run stores results on ephemeral disk — GET can 404 on another instance. Retry, then keep a blob. */
-export async function fetchResultBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+export async function fetchResultBlob(
+  path: string,
+  signal?: AbortSignal,
+  opts: { tries?: number } = {},
+): Promise<Blob> {
+  const tries = opts.tries ?? 3
   const urls = [mediaUrl(path), originUrl(path)].filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i)
   let lastMsg = 'Result expired or missing'
 
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < tries; attempt++) {
     for (const url of urls) {
       throwIfAborted(signal)
       try {
@@ -84,13 +89,13 @@ export async function fetchResultBlob(path: string, signal?: AbortSignal): Promi
         lastMsg = e instanceof Error ? e.message : 'Fetch failed'
       }
     }
-    await sleep(400 + attempt * 350)
+    if (attempt < tries - 1) await sleep(200 + attempt * 200)
   }
   throw new Error(`${lastMsg}. Run detection again.`)
 }
 
-export async function fetchResultObjectUrl(path: string, signal?: AbortSignal): Promise<string> {
-  const blob = await fetchResultBlob(path, signal)
+export async function fetchResultObjectUrl(path: string, signal?: AbortSignal, opts: { tries?: number } = {}): Promise<string> {
+  const blob = await fetchResultBlob(path, signal, opts)
   return URL.createObjectURL(blob)
 }
 

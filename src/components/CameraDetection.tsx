@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
-import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
+import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
 import SheepTimeline from './SheepTimeline'
 
@@ -142,45 +142,62 @@ export default function CameraDetection({ onToast }: Props) {
         signal: ac.signal,
       })
 
-      setPhase('saving')
       revokeResultBlobs()
       setResult(data)
 
-      let mediaSrc: string | null = null
-      let posterSrc: string | null = null
-      let csvSrc: string | null = null
+      const isPhoto = data.kind === 'image' || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(data.media_url)
 
-      if (data.poster_url) {
-        try {
-          posterSrc = keepBlob(await fetchResultObjectUrl(data.poster_url, ac.signal))
-          setResultPoster(posterSrc)
-        } catch {
-          posterSrc = null
+      if (isPhoto) {
+        const photoSrc = mediaUrl(data.media_url)
+        if (!photoSrc) throw new Error('API response missing media_url')
+        setResultMedia(photoSrc)
+        setResultPoster(null)
+        setCsvUrl(null)
+        setTimeline(null)
+      } else {
+        setPhase('saving')
+        let mediaSrc: string | null = null
+        let posterSrc: string | null = null
+
+        const jobs: Promise<void>[] = [
+          fetchResultObjectUrl(data.media_url, ac.signal, { tries: 4 }).then((url) => {
+            mediaSrc = keepBlob(url)
+            setResultMedia(url)
+          }),
+        ]
+
+        if (data.poster_url && data.poster_url !== data.media_url) {
+          jobs.push(
+            fetchResultObjectUrl(data.poster_url, ac.signal, { tries: 2 })
+              .then((url) => {
+                posterSrc = keepBlob(url)
+                setResultPoster(url)
+              })
+              .catch(() => undefined),
+          )
         }
-      }
 
-      try {
-        mediaSrc = keepBlob(await fetchResultObjectUrl(data.media_url, ac.signal))
-        setResultMedia(mediaSrc)
-      } catch {
-        if (posterSrc) setResultMedia(posterSrc)
-        else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
-      }
-
-      if (data.csv_url) {
-        try {
-          const csvBlob = await fetchResultBlob(data.csv_url, ac.signal)
-          setTimeline(parseTimelineCsv(await csvBlob.text()))
-          csvSrc = keepBlob(URL.createObjectURL(csvBlob))
-          setCsvUrl(csvSrc)
-        } catch {
-          setCsvUrl(null)
-          setTimeline(null)
+        if (data.csv_url) {
+          jobs.push(
+            fetchResultBlob(data.csv_url, ac.signal, { tries: 2 })
+              .then(async (csvBlob) => {
+                setTimeline(parseTimelineCsv(await csvBlob.text()))
+                setCsvUrl(keepBlob(URL.createObjectURL(csvBlob)))
+              })
+              .catch(() => {
+                setCsvUrl(null)
+                setTimeline(null)
+              }),
+          )
         }
-      }
 
-      // Videos: show annotated poster first (reliable). MP4 is optional player.
-      if (data.kind === 'video') {
+        const results = await Promise.allSettled(jobs)
+        const mediaFailed = results[0]?.status === 'rejected'
+        if (mediaFailed) {
+          if (posterSrc) setResultMedia(posterSrc)
+          else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
+        }
+
         setShowVideoPlayer(false)
       }
 
