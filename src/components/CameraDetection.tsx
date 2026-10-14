@@ -2,8 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
 import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
-import { formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
+import { detectKind, formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
 import SheepTimeline from './SheepTimeline'
+
+const SAMPLES = [
+  { src: '/samples/barn-01.jpg', name: 'barn-01.jpg', label: 'CAM 4 · eat', mime: 'image/jpeg' },
+  { src: '/samples/barn-02.jpg', name: 'barn-02.jpg', label: 'CAM 4 · move', mime: 'image/jpeg' },
+  { src: '/samples/barn-03.jpg', name: 'barn-03.jpg', label: 'CAM 6 · sit', mime: 'image/jpeg' },
+  { src: '/samples/barn-04.jpg', name: 'barn-04.jpg', label: 'CAM 6 · rest', mime: 'image/jpeg' },
+  { src: '/samples/barn-06.jpg', name: 'barn-06.jpg', label: 'CAM 4 · feed', mime: 'image/jpeg' },
+  { src: '/samples/barn-07.jpg', name: 'barn-07.jpg', label: 'CAM 4 · group', mime: 'image/jpeg' },
+  { src: '/samples/barn-08.jpg', name: 'barn-08.jpg', label: 'CAM 4 · stand', mime: 'image/jpeg' },
+  { src: '/samples/barn-video.mp4', name: '16316792_2160_3840_60fps.mp4', label: 'Video · 4K', mime: 'video/mp4' },
+]
 
 type Props = {
   onToast?: (msg: string) => void
@@ -29,6 +40,7 @@ export default function CameraDetection({ onToast }: Props) {
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
   const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending' | 'saving'>('idle')
   const [compressNote, setCompressNote] = useState<string | null>(null)
+  const [activeSample, setActiveSample] = useState<string | null>(null)
 
   const isVideo = file ? isVideoFile(file) : false
   const isImage = file ? isImageFile(file) : false
@@ -47,9 +59,13 @@ export default function CameraDetection({ onToast }: Props) {
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
-      revokeResultBlobs()
       abortRef.current?.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
   }, [previewUrl])
 
@@ -79,15 +95,27 @@ export default function CameraDetection({ onToast }: Props) {
     setShowVideoPlayer(false)
     setPhase('idle')
     setCompressNote(null)
+    setActiveSample(null)
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const onFile = (next: File | undefined) => {
-    if (!next) return
-    if (!isImageFile(next) && !isVideoFile(next)) {
+  const onFile = (raw: File | undefined) => {
+    if (!raw) return
+    void ingestFile(raw)
+  }
+
+  const ingestFile = async (raw: File) => {
+    const kind = await detectKind(raw)
+    if (!kind) {
       onToast?.('Please upload a photo or video file')
       return
     }
+    const next =
+      raw.type && (kind === 'video' ? isVideoFile(raw) : isImageFile(raw))
+        ? raw
+        : new File([raw], raw.name || (kind === 'video' ? 'clip.mp4' : 'photo.jpg'), {
+            type: kind === 'video' ? 'video/mp4' : 'image/jpeg',
+          })
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     revokeResultBlobs()
     setFile(next)
@@ -101,15 +129,18 @@ export default function CameraDetection({ onToast }: Props) {
     setVideoFailed(false)
     setShowVideoPlayer(false)
     setCompressNote(null)
+    if (!SAMPLES.some((s) => s.name === next.name || s.src.endsWith(next.name))) setActiveSample(null)
     const sizeHint = formatBytes(next.size)
     const big = next.size > 28 * 1024 * 1024
     onToast?.(
-      `${isImageFile(next) ? 'Photo' : 'Video'} ready · ${sizeHint}${big ? ' · will compress before send' : ''}`,
+      `${kind === 'image' ? 'Photo' : 'Video'} ready · ${sizeHint}${big ? ' · will compress before send' : ''}`,
     )
+    return next
   }
 
-  const runDetection = async () => {
-    if (!file) {
+  const runDetection = async (overrideFile?: File) => {
+    const source = overrideFile instanceof File ? overrideFile : file
+    if (!source) {
       onToast?.('Upload a photo or video first')
       return
     }
@@ -130,7 +161,7 @@ export default function CameraDetection({ onToast }: Props) {
     setCompressNote(null)
 
     try {
-      const prepared = await prepareForUpload(file, {
+      const prepared = await prepareForUpload(source, {
         signal: ac.signal,
         onProgress: (msg) => setCompressNote(msg),
       })
@@ -214,6 +245,28 @@ export default function CameraDetection({ onToast }: Props) {
     }
   }
 
+  const runSample = async (sample: (typeof SAMPLES)[number]) => {
+    if (running) return
+    try {
+      const res = await fetch(sample.src)
+      if (!res.ok) {
+        onToast?.('Sample could not be loaded')
+        return
+      }
+      const blob = await res.blob()
+      const next = new File([blob], sample.name, {
+        type: sample.mime || blob.type || (sample.src.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg'),
+      })
+      setActiveSample(sample.src)
+      const prepared = await ingestFile(next)
+      if (!prepared) return
+      await runDetection(prepared)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Sample could not be loaded'
+      onToast?.(msg)
+    }
+  }
+
   const count = result?.summary?.count ?? result?.detections.length ?? 0
   const mainVisual =
     resultIsImage
@@ -236,7 +289,17 @@ export default function CameraDetection({ onToast }: Props) {
               )
             }
           />
-          <div className="relative mx-5 mb-5 min-h-[320px] overflow-hidden rounded-xl bg-charcoal sm:aspect-[9/16] sm:max-h-[70vh] lg:aspect-video lg:max-h-none">
+          <div
+            className="relative mx-5 mb-5 min-h-[320px] overflow-hidden rounded-xl bg-charcoal sm:aspect-[9/16] sm:max-h-[70vh] lg:aspect-video lg:max-h-none"
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              onFile(e.dataTransfer.files?.[0])
+            }}
+          >
             {!file && (
               <button
                 type="button"
@@ -247,7 +310,7 @@ export default function CameraDetection({ onToast }: Props) {
                   <Upload size={26} />
                 </span>
                 <span className="text-sm font-bold text-white">Drop photo or video</span>
-                <span className="text-xs text-slate-400">JPG, PNG, MP4, WebM → POST /predict</span>
+                <span className="text-xs text-slate-400">or click a sample barn frame below</span>
               </button>
             )}
 
@@ -304,6 +367,35 @@ export default function CameraDetection({ onToast }: Props) {
                   : `● DONE · ${count} detected · conf ${(confidence * 100).toFixed(0)}%`}
               </div>
             )}
+          </div>
+
+          <div className="mx-5 mb-5">
+            <p className="mb-2 text-xs font-bold text-slate-500">Sample barn clips · click to analyse</p>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+              {SAMPLES.map((s) => (
+                <button
+                  key={s.src}
+                  type="button"
+                  disabled={running}
+                  onClick={() => runSample(s)}
+                  className={`overflow-hidden rounded-lg border text-left transition hover:border-green-brand disabled:opacity-50 ${
+                    activeSample === s.src ? 'border-green-brand ring-2 ring-green-brand/40' : 'border-slate-200'
+                  }`}
+                >
+                  {s.mime.startsWith('video/') ? (
+                    <span className="relative block aspect-square bg-charcoal">
+                      <video src={s.src} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+                        <Play size={16} fill="currentColor" />
+                      </span>
+                    </span>
+                  ) : (
+                    <img src={s.src} alt={s.label} className="aspect-square w-full object-cover" />
+                  )}
+                  <span className="block truncate px-1 py-1 text-[10px] font-semibold text-slate-500">{s.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {resultMedia && !resultIsImage && (
@@ -377,7 +469,7 @@ export default function CameraDetection({ onToast }: Props) {
             <input
               ref={inputRef}
               type="file"
-              accept="image/*,video/*"
+              accept=".mp4,.webm,.mov,.m4v,.jpg,.jpeg,.png,.webp,video/*,image/*"
               className="hidden"
               onChange={(e) => onFile(e.target.files?.[0])}
             />
@@ -426,7 +518,7 @@ export default function CameraDetection({ onToast }: Props) {
 
             <button
               type="button"
-              onClick={runDetection}
+              onClick={() => void runDetection()}
               disabled={!file || running}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-green-brand px-4 py-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep disabled:opacity-50"
             >

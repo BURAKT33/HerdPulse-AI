@@ -11,12 +11,55 @@ export function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const VIDEO_EXT = /\.(mp4|m4v|webm|mov|avi|mkv|mpeg|mpg|3gp)$/i
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|avif)$/i
+
+function fileName(file: File) {
+  return (file.name || '').trim()
+}
+
+function extKind(name: string): 'image' | 'video' | null {
+  if (VIDEO_EXT.test(name)) return 'video'
+  if (IMAGE_EXT.test(name)) return 'image'
+  return null
+}
+
+function mimeKind(type: string | undefined): 'image' | 'video' | null {
+  const t = (type || '').toLowerCase()
+  if (t.startsWith('video/') || t === 'application/mp4' || t === 'application/quicktime') return 'video'
+  if (t.startsWith('image/')) return 'image'
+  return null
+}
+
 export function isVideoFile(file: File) {
-  return !!file.type?.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name)
+  return extKind(fileName(file)) === 'video' || mimeKind(file.type) === 'video'
 }
 
 export function isImageFile(file: File) {
-  return !!file.type?.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(file.name)
+  if (extKind(fileName(file)) === 'video') return false
+  return extKind(fileName(file)) === 'image' || mimeKind(file.type) === 'image'
+}
+
+async function sniffKind(file: File): Promise<'image' | 'video' | null> {
+  const buf = new Uint8Array(await file.slice(0, 16).arrayBuffer())
+  if (buf.length < 12) return null
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image'
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image'
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image'
+  const four = (i: number) => String.fromCharCode(buf[i], buf[i + 1], buf[i + 2], buf[i + 3])
+  if (four(4) === 'ftyp') return 'video'
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'video'
+  if (four(0) === 'RIFF') {
+    const form = four(8)
+    if (form === 'WEBP') return 'image'
+    if (form === 'AVI ') return 'video'
+  }
+  return null
+}
+
+export async function detectKind(file: File): Promise<'image' | 'video' | null> {
+  if (!(file instanceof Blob)) return null
+  return extKind(fileName(file)) || mimeKind(file.type) || (await sniffKind(file))
 }
 
 export type CompressProgress = (msg: string) => void
@@ -25,11 +68,12 @@ export async function prepareForUpload(
   file: File,
   opts: { signal?: AbortSignal; onProgress?: CompressProgress } = {},
 ): Promise<{ file: File; note: string }> {
-  if (isImageFile(file)) {
+  const kind = await detectKind(file)
+  if (kind === 'image') {
     const out = await compressImage(file, opts)
     return { file: out, note: noteFor(file, out) }
   }
-  if (isVideoFile(file)) {
+  if (kind === 'video') {
     if (file.size <= 20 * 1024 * 1024) {
       return { file, note: `Original ${formatBytes(file.size)} · under API limit` }
     }
