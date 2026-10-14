@@ -48,6 +48,65 @@ export function mediaUrl(path: string | null | undefined): string | null {
   return `${SHEEP_API}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+function originUrl(path: string) {
+  const proxied = mediaUrl(path)
+  if (!proxied) return null
+  if (proxied.startsWith(SHEEP_API_ORIGIN)) return proxied
+  if (proxied.startsWith(SHEEP_API)) return `${SHEEP_API_ORIGIN}${proxied.slice(SHEEP_API.length)}`
+  return `${SHEEP_API_ORIGIN}${proxied.startsWith('/') ? proxied : `/${proxied}`}`
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+/** Cloud Run stores results on ephemeral disk — GET can 404 on another instance. Retry, then keep a blob. */
+export async function fetchResultBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const urls = [mediaUrl(path), originUrl(path)].filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i)
+  let lastMsg = 'Result expired or missing'
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    for (const url of urls) {
+      throwIfAborted(signal)
+      try {
+        const res = await fetch(url, { signal })
+        const buf = await res.arrayBuffer()
+        const head = new TextDecoder().decode(buf.slice(0, 120))
+        if (!res.ok || /expired or missing/i.test(head)) {
+          lastMsg = head.replace(/<[^>]+>/g, ' ').trim().slice(0, 160) || `HTTP ${res.status}`
+          continue
+        }
+        if (buf.byteLength < 64) continue
+        const type = res.headers.get('content-type') || guessType(path)
+        return new Blob([buf], { type })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') throw e
+        lastMsg = e instanceof Error ? e.message : 'Fetch failed'
+      }
+    }
+    await sleep(400 + attempt * 350)
+  }
+  throw new Error(`${lastMsg}. Run detection again.`)
+}
+
+export async function fetchResultObjectUrl(path: string, signal?: AbortSignal): Promise<string> {
+  const blob = await fetchResultBlob(path, signal)
+  return URL.createObjectURL(blob)
+}
+
+function guessType(path: string) {
+  if (/\.mp4(\?|$)/i.test(path)) return 'video/mp4'
+  if (/\.webm(\?|$)/i.test(path)) return 'video/webm'
+  if (/\.jpe?g(\?|$)/i.test(path)) return 'image/jpeg'
+  if (/\.png(\?|$)/i.test(path)) return 'image/png'
+  if (/\.csv(\?|$)/i.test(path)) return 'text/csv'
+  return 'application/octet-stream'
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+}
+
 function pickString(data: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const value = data[key]
@@ -193,11 +252,8 @@ const BEHAVIOUR_ALIASES: Record<string, string> = {
 }
 
 export async function fetchTimeline(csvPath: string, signal?: AbortSignal): Promise<Timeline> {
-  const url = mediaUrl(csvPath)
-  if (!url) throw new Error('Missing csv_url')
-  const res = await fetch(url, { signal })
-  if (!res.ok) throw new Error(`CSV fetch failed (${res.status})`)
-  return parseTimelineCsv(await res.text())
+  const blob = await fetchResultBlob(csvPath, signal)
+  return parseTimelineCsv(await blob.text())
 }
 
 export function parseTimelineCsv(text: string): Timeline {

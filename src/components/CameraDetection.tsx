@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
-import { FRAME_INTERVAL, fetchTimeline, mediaUrl, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
+import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
 import SheepTimeline from './SheepTimeline'
 
@@ -12,6 +12,7 @@ type Props = {
 export default function CameraDetection({ onToast }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const resultBlobsRef = useRef<string[]>([])
 
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -26,7 +27,7 @@ export default function CameraDetection({ onToast }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [videoFailed, setVideoFailed] = useState(false)
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
-  const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending' | 'saving'>('idle')
   const [compressNote, setCompressNote] = useState<string | null>(null)
 
   const isVideo = file ? isVideoFile(file) : false
@@ -34,9 +35,20 @@ export default function CameraDetection({ onToast }: Props) {
   const resultIsImage =
     result?.kind === 'image' || (!!resultMedia && /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(resultMedia))
 
+  const revokeResultBlobs = () => {
+    resultBlobsRef.current.forEach((u) => URL.revokeObjectURL(u))
+    resultBlobsRef.current = []
+  }
+
+  const keepBlob = (url: string) => {
+    resultBlobsRef.current.push(url)
+    return url
+  }
+
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
+      revokeResultBlobs()
       abortRef.current?.abort()
     }
   }, [previewUrl])
@@ -54,6 +66,7 @@ export default function CameraDetection({ onToast }: Props) {
   const clearMedia = () => {
     abortRef.current?.abort()
     if (previewUrl) URL.revokeObjectURL(previewUrl)
+    revokeResultBlobs()
     setFile(null)
     setPreviewUrl(null)
     setResult(null)
@@ -76,6 +89,7 @@ export default function CameraDetection({ onToast }: Props) {
       return
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl)
+    revokeResultBlobs()
     setFile(next)
     setPreviewUrl(URL.createObjectURL(next))
     setResult(null)
@@ -127,23 +141,40 @@ export default function CameraDetection({ onToast }: Props) {
         conf: confidence,
         signal: ac.signal,
       })
-      const mediaSrc = mediaUrl(data.media_url)
-      const posterSrc = mediaUrl(data.poster_url)
-      const csvSrc = mediaUrl(data.csv_url)
 
-      if (!mediaSrc) {
-        throw new Error('API response missing media_url')
+      setPhase('saving')
+      revokeResultBlobs()
+      setResult(data)
+
+      let mediaSrc: string | null = null
+      let posterSrc: string | null = null
+      let csvSrc: string | null = null
+
+      if (data.poster_url) {
+        try {
+          posterSrc = keepBlob(await fetchResultObjectUrl(data.poster_url, ac.signal))
+          setResultPoster(posterSrc)
+        } catch {
+          posterSrc = null
+        }
       }
 
-      setResult(data)
-      setResultMedia(mediaSrc)
-      setResultPoster(posterSrc)
-      setCsvUrl(csvSrc)
+      try {
+        mediaSrc = keepBlob(await fetchResultObjectUrl(data.media_url, ac.signal))
+        setResultMedia(mediaSrc)
+      } catch {
+        if (posterSrc) setResultMedia(posterSrc)
+        else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
+      }
 
       if (data.csv_url) {
         try {
-          setTimeline(await fetchTimeline(data.csv_url, ac.signal))
+          const csvBlob = await fetchResultBlob(data.csv_url, ac.signal)
+          setTimeline(parseTimelineCsv(await csvBlob.text()))
+          csvSrc = keepBlob(URL.createObjectURL(csvBlob))
+          setCsvUrl(csvSrc)
         } catch {
+          setCsvUrl(null)
           setTimeline(null)
         }
       }
@@ -252,7 +283,7 @@ export default function CameraDetection({ onToast }: Props) {
             {(running || resultMedia) && (
               <div className="glass-dark absolute left-3 top-3 rounded-lg px-3 py-2 font-mono text-[11px] text-green-brand">
                 {running
-                  ? `● ${phase === 'compressing' ? 'COMPRESSING' : 'SENDING'} · ${waitSec}s`
+                  ? `● ${phase === 'compressing' ? 'COMPRESSING' : phase === 'saving' ? 'SAVING RESULT' : 'SENDING'} · ${waitSec}s`
                   : `● DONE · ${count} detected · conf ${(confidence * 100).toFixed(0)}%`}
               </div>
             )}
@@ -386,7 +417,9 @@ export default function CameraDetection({ onToast }: Props) {
               {running
                 ? phase === 'compressing'
                   ? `Compressing… ${waitSec}s`
-                  : `Sending… ${waitSec}s`
+                  : phase === 'saving'
+                    ? `Saving result… ${waitSec}s`
+                    : `Sending… ${waitSec}s`
                 : 'Run detection'}
             </button>
 
