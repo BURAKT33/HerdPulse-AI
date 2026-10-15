@@ -541,7 +541,7 @@ export default function CameraDetection({ onToast }: Props) {
                 <Camera size={18} />
               </span>
               <div>
-                <p className="text-sm font-bold">Camera Detection</p>
+                <p className="text-sm font-bold">Camera Detection!</p>
                 <p className="text-xs text-slate-500">snn-sheep-api · /predict</p>
               </div>
             </div>
