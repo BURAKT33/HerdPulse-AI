@@ -3,7 +3,7 @@ import { Camera, Download, ImagePlus, Link2, Loader2, Play, Trash2, Upload, Vide
 import { Card, CardHead } from './DashShell'
 import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { detectKind, formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
-import { fetchYoutubeAsFile, parseYouTubeId } from '../lib/youtube'
+import { parseYouTubeId, predictYouTube } from '../lib/youtube'
 import SheepTimeline from './SheepTimeline'
 
 const SAMPLES = [
@@ -262,22 +262,92 @@ export default function CameraDetection({ onToast }: Props) {
     setRunning(true)
     setPhase('fetching')
     setError(null)
-    setCompressNote('Downloading YouTube clip as a file…')
+    setResult(null)
+    setResultMedia(null)
+    setResultPoster(null)
+    setCsvUrl(null)
+    setTimeline(null)
+    setVideoFailed(false)
+    setShowVideoPlayer(false)
+    setActiveSample(null)
+    setCompressNote('Downloading YouTube as a file, then sending to /predict…')
 
     try {
-      const raw = await fetchYoutubeAsFile(url, ac.signal)
-      const prepared = await ingestFile(raw)
-      if (!prepared) {
-        setRunning(false)
-        setPhase('idle')
-        return
+      setPhase('sending')
+      const data = await predictYouTube(url, {
+        stride: FRAME_INTERVAL,
+        conf: confidence,
+        signal: ac.signal,
+      })
+
+      const sourceName = data._source?.name || 'youtube.mp4'
+      const sourceBytes = data._source?.bytes || 0
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      revokeResultBlobs()
+      setFile(new File([new Uint8Array(0)], sourceName, { type: 'video/mp4' }))
+      setPreviewUrl(null)
+      setCompressNote(
+        sourceBytes > 0
+          ? `YouTube file ${formatBytes(sourceBytes)} · sent as multipart file (not as a URL)`
+          : 'YouTube clip sent as multipart file (not as a URL)',
+      )
+
+      setResult(data)
+      const isPhoto = data.kind === 'image' || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(data.media_url)
+
+      if (isPhoto) {
+        const photoSrc = mediaUrl(data.media_url)
+        if (!photoSrc) throw new Error('API response missing media_url')
+        setResultMedia(photoSrc)
+        setResultPoster(null)
+      } else {
+        setPhase('saving')
+        let posterSrc: string | null = null
+        const jobs: Promise<void>[] = [
+          fetchResultObjectUrl(data.media_url, ac.signal, { tries: 4 }).then((u) => {
+            keepBlob(u)
+            setResultMedia(u)
+          }),
+        ]
+        if (data.poster_url && data.poster_url !== data.media_url) {
+          jobs.push(
+            fetchResultObjectUrl(data.poster_url, ac.signal, { tries: 2 })
+              .then((u) => {
+                posterSrc = keepBlob(u)
+                setResultPoster(u)
+              })
+              .catch(() => undefined),
+          )
+        }
+        if (data.csv_url) {
+          jobs.push(
+            fetchResultBlob(data.csv_url, ac.signal, { tries: 2 })
+              .then(async (csvBlob) => {
+                setTimeline(parseTimelineCsv(await csvBlob.text()))
+                setCsvUrl(keepBlob(URL.createObjectURL(csvBlob)))
+              })
+              .catch(() => {
+                setCsvUrl(null)
+                setTimeline(null)
+              }),
+          )
+        }
+        const results = await Promise.allSettled(jobs)
+        if (results[0]?.status === 'rejected') {
+          if (posterSrc) setResultMedia(posterSrc)
+          else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
+        }
+        setShowVideoPlayer(false)
       }
-      await runDetection(prepared)
+
+      const count = data.summary?.count ?? data.detections.length
+      onToast?.(`Detection complete · ${count} sheep · ${data.elapsed_ms ?? '?'} ms`)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       const msg = e instanceof Error ? e.message : 'YouTube download failed'
       setError(msg)
       onToast?.(msg)
+    } finally {
       setRunning(false)
       setPhase('idle')
     }

@@ -17,7 +17,11 @@ const proxy = {
 }
 
 function youtubeFilePlugin(): Plugin {
-  const handle = async (req: { url?: string; method?: string }, res: { setHeader: (k: string, v: string) => void; end: (b?: unknown) => void; statusCode: number }, next: () => void) => {
+  const handle = async (
+    req: { url?: string; method?: string },
+    res: { setHeader: (k: string, v: string) => void; end: (b?: unknown) => void; statusCode: number },
+    next: () => void,
+  ) => {
     const raw = req.url || ''
     const pathName = raw.split('?')[0]
     if (pathName !== '/api/yt-file') return next()
@@ -29,13 +33,29 @@ function youtubeFilePlugin(): Plugin {
     }
 
     try {
-      const { downloadYouTube } = await import('./server/yt-file.mjs')
-      const url = new URL(raw, 'http://localhost').searchParams.get('url') || ''
-      const file = await downloadYouTube(url)
+      const { downloadYouTube, predictFromYouTube } = await import('./server/yt-file.mjs')
+      const params = new URL(raw, 'http://localhost').searchParams
+      const url = params.get('url') || ''
+      const mode = params.get('mode') || 'predict'
+
+      if (mode === 'file') {
+        const file = await downloadYouTube(url)
+        res.statusCode = 200
+        res.setHeader('Content-Type', file.type)
+        res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`)
+        res.end(file.buf)
+        return
+      }
+
+      const conf = params.get('conf')
+      const stride = params.get('stride')
+      const data = await predictFromYouTube(url, {
+        conf: conf != null ? Number(conf) : undefined,
+        stride: stride != null ? Number(stride) : 5,
+      })
       res.statusCode = 200
-      res.setHeader('Content-Type', file.type)
-      res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`)
-      res.end(file.buf)
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(data))
     } catch (e) {
       const err = e as { status?: number; message?: string }
       res.statusCode = err.status || 500
