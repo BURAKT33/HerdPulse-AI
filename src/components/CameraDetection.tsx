@@ -344,7 +344,10 @@ export default function CameraDetection({ onToast }: Props) {
       onToast?.(`Detection complete · ${count} sheep · ${data.elapsed_ms ?? '?'} ms`)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      const msg = e instanceof Error ? e.message : 'YouTube download failed'
+      const raw = e instanceof Error ? e.message : 'YouTube download failed'
+      const msg = /bot|blocked|422|no downloadable/i.test(raw)
+        ? 'YouTube blocked the cloud download. Save the Shorts/video to your device and use Upload.'
+        : raw
       setError(msg)
       onToast?.(msg)
     } finally {
@@ -516,7 +519,9 @@ export default function CameraDetection({ onToast }: Props) {
               <p className="text-xs font-bold text-slate-600">YouTube link</p>
             </div>
             {renderYoutubeField()}
-            <p className="mt-1.5 text-[11px] text-slate-400">Paste a YouTube or Shorts URL, then Load. It becomes a file before /predict.</p>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Live site: YouTube often blocks cloud IPs — download the clip and use Upload. Link → file works on local Wi‑Fi.
+            </p>
           </div>
 
           <div className="mx-3 mb-4 sm:mx-5 sm:mb-5">

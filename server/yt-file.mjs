@@ -97,7 +97,7 @@ export async function downloadYouTube(rawUrl) {
   }
 
   fail(
-    `${last}. YouTube often blocks cloud servers — try Upload with the downloaded clip, or another link.`,
+    'YouTube blocked this cloud download (bot check). On the live site, download the Shorts/video and use Upload instead. Link download works on local Wi‑Fi only.',
     422,
   )
 }
