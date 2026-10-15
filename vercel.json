@@ -5,7 +5,7 @@
       "destination": "https://snn-sheep-api-2txzd5xoia-ew.a.run.app/:path*"
     },
     {
-      "source": "/((?!sheep-api/).*)",
+      "source": "/((?!sheep-api/|api/).*)",
       "destination": "/index.html"
     }
   ]

@@ -5,6 +5,55 @@ import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
 
+const proxy = {
+  '/sheep-api': {
+    target: 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app',
+    changeOrigin: true,
+    secure: true,
+    rewrite: (p: string) => p.replace(/^\/sheep-api/, ''),
+    timeout: 600_000,
+    proxyTimeout: 600_000,
+  },
+}
+
+function youtubeFilePlugin(): Plugin {
+  const handle = async (req: { url?: string; method?: string }, res: { setHeader: (k: string, v: string) => void; end: (b?: unknown) => void; statusCode: number }, next: () => void) => {
+    const raw = req.url || ''
+    const pathName = raw.split('?')[0]
+    if (pathName !== '/api/yt-file') return next()
+    if (req.method && req.method !== 'GET' && req.method !== 'POST') {
+      res.statusCode = 405
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ detail: 'Method not allowed' }))
+      return
+    }
+
+    try {
+      const { downloadYouTube } = await import('./server/yt-file.mjs')
+      const url = new URL(raw, 'http://localhost').searchParams.get('url') || ''
+      const file = await downloadYouTube(url)
+      res.statusCode = 200
+      res.setHeader('Content-Type', file.type)
+      res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`)
+      res.end(file.buf)
+    } catch (e) {
+      const err = e as { status?: number; message?: string }
+      res.statusCode = err.status || 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ detail: err.message || 'YouTube download failed' }))
+    }
+  }
+
+  return {
+    name: 'youtube-file',
+    configureServer(server) {
+      server.middlewares.use(handle)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handle)
+    },
+  }
+}
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -24,6 +73,7 @@ react(),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      youtubeFilePlugin(),
     ],
     resolve: {
       alias: {
@@ -34,16 +84,7 @@ react(),
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
-      proxy: {
-        '/sheep-api': {
-          target: 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app',
-          changeOrigin: true,
-          secure: true,
-          rewrite: (p) => p.replace(/^\/sheep-api/, ''),
-          timeout: 600_000,
-          proxyTimeout: 600_000,
-        },
-      },
+      proxy,
       watch: {
         ignored: [
           '**/.figma/**',
@@ -53,16 +94,7 @@ react(),
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
-      proxy: {
-        '/sheep-api': {
-          target: 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app',
-          changeOrigin: true,
-          secure: true,
-          rewrite: (p) => p.replace(/^\/sheep-api/, ''),
-          timeout: 600_000,
-          proxyTimeout: 600_000,
-        },
-      },
+      proxy,
     },
   }
 })

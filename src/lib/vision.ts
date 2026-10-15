@@ -2,8 +2,8 @@
 export const SHEEP_API = '/sheep-api'
 export const SHEEP_API_ORIGIN = 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app'
 
-/** 1 = every frame. Higher stride skips frames and the result video stutters. */
-export const FRAME_INTERVAL = 1 as const
+/** Video frame stride sent as FormData `stride`. API default is 5. */
+export const FRAME_INTERVAL = 5 as const
 
 export type SheepDetection = {
   class?: string
@@ -141,6 +141,7 @@ export async function predictSheep(
   fd.append('file', file)
   fd.append('stride', String(stride))
   if (opts.conf != null) fd.append('conf', String(opts.conf))
+  // Do not append youtube_url — Vercel → Cloud Run must be a file upload.
 
   const res = await fetch(`${SHEEP_API}/predict`, {
     method: 'POST',

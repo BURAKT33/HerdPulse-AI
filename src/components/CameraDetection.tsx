@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
+import { Camera, Download, ImagePlus, Link2, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
 import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { detectKind, formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
+import { fetchYoutubeAsFile, parseYouTubeId } from '../lib/youtube'
 import SheepTimeline from './SheepTimeline'
 
 const SAMPLES = [
@@ -38,9 +39,10 @@ export default function CameraDetection({ onToast }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [videoFailed, setVideoFailed] = useState(false)
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
-  const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending' | 'saving'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'fetching' | 'compressing' | 'sending' | 'saving'>('idle')
   const [compressNote, setCompressNote] = useState<string | null>(null)
   const [activeSample, setActiveSample] = useState<string | null>(null)
+  const [youtubeUrl, setYoutubeUrl] = useState('')
 
   const isVideo = file ? isVideoFile(file) : false
   const isImage = file ? isImageFile(file) : false
@@ -96,6 +98,7 @@ export default function CameraDetection({ onToast }: Props) {
     setPhase('idle')
     setCompressNote(null)
     setActiveSample(null)
+    setYoutubeUrl('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -245,6 +248,41 @@ export default function CameraDetection({ onToast }: Props) {
     }
   }
 
+  const runYoutube = async () => {
+    const url = youtubeUrl.trim()
+    if (!parseYouTubeId(url)) {
+      onToast?.('Enter a valid YouTube or Shorts link')
+      return
+    }
+    if (running) return
+
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    setRunning(true)
+    setPhase('fetching')
+    setError(null)
+    setCompressNote('Downloading YouTube clip as a file…')
+
+    try {
+      const raw = await fetchYoutubeAsFile(url, ac.signal)
+      const prepared = await ingestFile(raw)
+      if (!prepared) {
+        setRunning(false)
+        setPhase('idle')
+        return
+      }
+      await runDetection(prepared)
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      const msg = e instanceof Error ? e.message : 'YouTube download failed'
+      setError(msg)
+      onToast?.(msg)
+      setRunning(false)
+      setPhase('idle')
+    }
+  }
+
   const runSample = async (sample: (typeof SAMPLES)[number]) => {
     if (running) return
     try {
@@ -310,7 +348,7 @@ export default function CameraDetection({ onToast }: Props) {
                   <Upload size={26} />
                 </span>
                 <span className="text-sm font-bold text-white">Drop photo or video</span>
-                <span className="text-xs text-slate-400">or click a sample barn frame below</span>
+                <span className="text-xs text-slate-400">or paste a YouTube link / click a sample</span>
               </button>
             )}
 
@@ -363,7 +401,7 @@ export default function CameraDetection({ onToast }: Props) {
             {(running || resultMedia) && (
               <div className="glass-dark absolute left-3 top-3 rounded-lg px-3 py-2 font-mono text-[11px] text-green-brand">
                 {running
-                  ? `● ${phase === 'compressing' ? 'COMPRESSING' : phase === 'saving' ? 'SAVING RESULT' : 'SENDING'} · ${waitSec}s`
+                  ? `● ${phase === 'fetching' ? 'FETCHING YOUTUBE' : phase === 'compressing' ? 'COMPRESSING' : phase === 'saving' ? 'SAVING RESULT' : 'SENDING'} · ${waitSec}s`
                   : `● DONE · ${count} detected · conf ${(confidence * 100).toFixed(0)}%`}
               </div>
             )}
@@ -485,12 +523,44 @@ export default function CameraDetection({ onToast }: Props) {
               <button
                 type="button"
                 onClick={clearMedia}
-                disabled={!file && !running}
+                disabled={!file && !running && !youtubeUrl}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-bold transition hover:border-amber-400 hover:text-amber-700 disabled:opacity-40"
               >
                 <Trash2 size={15} /> Clear
               </button>
             </div>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold text-slate-500">YouTube link</span>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://youtu.be/… or Shorts"
+                  value={youtubeUrl}
+                  disabled={running}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void runYoutube()
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-brand"
+                />
+                <button
+                  type="button"
+                  onClick={() => void runYoutube()}
+                  disabled={running || !youtubeUrl.trim()}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-charcoal px-3 py-2 text-[13px] font-bold text-white transition hover:bg-black disabled:opacity-40"
+                >
+                  <Link2 size={15} /> Load
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Downloaded as a file, then sent to /predict as multipart <span className="font-mono">file</span> — not as a URL.
+              </p>
+            </label>
 
             <label className="mt-5 block">
               <div className="flex items-center justify-between text-xs font-semibold">
@@ -513,7 +583,7 @@ export default function CameraDetection({ onToast }: Props) {
                 <span className="font-semibold text-slate-500">stride</span>
                 <span className="font-mono font-bold tabular-nums text-charcoal">{FRAME_INTERVAL}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Fixed at 1 for photo and video — every frame is analysed.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Fixed at 5 for video — every 5th frame is analysed.</p>
             </div>
 
             <button
@@ -524,11 +594,13 @@ export default function CameraDetection({ onToast }: Props) {
             >
               {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {running
-                ? phase === 'compressing'
-                  ? `Compressing… ${waitSec}s`
-                  : phase === 'saving'
-                    ? `Saving result… ${waitSec}s`
-                    : `Sending… ${waitSec}s`
+                ? phase === 'fetching'
+                  ? `Fetching YouTube… ${waitSec}s`
+                  : phase === 'compressing'
+                    ? `Compressing… ${waitSec}s`
+                    : phase === 'saving'
+                      ? `Saving result… ${waitSec}s`
+                      : `Sending… ${waitSec}s`
                 : 'Run detection'}
             </button>
 

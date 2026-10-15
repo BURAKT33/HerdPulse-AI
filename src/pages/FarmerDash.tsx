@@ -69,7 +69,7 @@ const statusTone: Record<string, string> = {
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '': { title: 'Good morning, Nikos', subtitle: 'Thursday, 8 October 2026 · Green Pastures Farm #4 · Chios & Skopelos flocks' },
   herd: { title: 'Herd & Health', subtitle: 'Animal registry, groups, and live health signals' },
-  camera: { title: 'Camera Detection', subtitle: 'Upload → compress if over 32 MB → POST /predict' },
+  camera: { title: 'Camera Detection', subtitle: 'Upload or YouTube → file → POST /predict' },
   milk: { title: 'Milk & Production', subtitle: 'Per-animal and herd yield analytics' },
   breeding: { title: 'Breeding Calendar', subtitle: 'Matings, births, and health schedule · October 2026' },
   iot: { title: 'IoT & Sensors', subtitle: 'Barn environment, wearables, and milking machines' },
