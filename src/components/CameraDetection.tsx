@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
+import { Camera, Download, ImagePlus, Link2, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
-import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
+import {
+  FRAME_INTERVAL,
+  fetchResultBlob,
+  fetchResultObjectUrl,
+  mediaUrl,
+  parseTimelineCsv,
+  parseYouTubeUrl,
+  predictSheep,
+  predictSheepYoutube,
+  type PredictResult,
+  type Timeline,
+} from '../lib/vision'
 import { detectKind, formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
 import SheepTimeline from './SheepTimeline'
 
@@ -41,6 +52,7 @@ export default function CameraDetection({ onToast }: Props) {
   const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending' | 'saving'>('idle')
   const [compressNote, setCompressNote] = useState<string | null>(null)
   const [activeSample, setActiveSample] = useState<string | null>(null)
+  const [youtubeUrl, setYoutubeUrl] = useState('')
 
   const isVideo = file ? isVideoFile(file) : false
   const isImage = file ? isImageFile(file) : false
@@ -96,6 +108,7 @@ export default function CameraDetection({ onToast }: Props) {
     setPhase('idle')
     setCompressNote(null)
     setActiveSample(null)
+    setYoutubeUrl('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -172,71 +185,120 @@ export default function CameraDetection({ onToast }: Props) {
         conf: confidence,
         signal: ac.signal,
       })
-
-      revokeResultBlobs()
-      setResult(data)
-
-      const isPhoto = data.kind === 'image' || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(data.media_url)
-
-      if (isPhoto) {
-        const photoSrc = mediaUrl(data.media_url)
-        if (!photoSrc) throw new Error('API response missing media_url')
-        setResultMedia(photoSrc)
-        setResultPoster(null)
-        setCsvUrl(null)
-        setTimeline(null)
-      } else {
-        setPhase('saving')
-        let mediaSrc: string | null = null
-        let posterSrc: string | null = null
-
-        const jobs: Promise<void>[] = [
-          fetchResultObjectUrl(data.media_url, ac.signal, { tries: 4 }).then((url) => {
-            mediaSrc = keepBlob(url)
-            setResultMedia(url)
-          }),
-        ]
-
-        if (data.poster_url && data.poster_url !== data.media_url) {
-          jobs.push(
-            fetchResultObjectUrl(data.poster_url, ac.signal, { tries: 2 })
-              .then((url) => {
-                posterSrc = keepBlob(url)
-                setResultPoster(url)
-              })
-              .catch(() => undefined),
-          )
-        }
-
-        if (data.csv_url) {
-          jobs.push(
-            fetchResultBlob(data.csv_url, ac.signal, { tries: 2 })
-              .then(async (csvBlob) => {
-                setTimeline(parseTimelineCsv(await csvBlob.text()))
-                setCsvUrl(keepBlob(URL.createObjectURL(csvBlob)))
-              })
-              .catch(() => {
-                setCsvUrl(null)
-                setTimeline(null)
-              }),
-          )
-        }
-
-        const results = await Promise.allSettled(jobs)
-        const mediaFailed = results[0]?.status === 'rejected'
-        if (mediaFailed) {
-          if (posterSrc) setResultMedia(posterSrc)
-          else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
-        }
-
-        setShowVideoPlayer(false)
-      }
-
-      const count = data.summary?.count ?? data.detections.length
-      onToast?.(`Detection complete · ${count} sheep · ${data.elapsed_ms ?? '?'} ms`)
+      await applyPredictResult(data, ac.signal)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       const msg = e instanceof Error ? e.message : 'Detection failed'
+      setError(msg)
+      onToast?.(msg)
+    } finally {
+      setRunning(false)
+      setPhase('idle')
+    }
+  }
+
+  const applyPredictResult = async (data: PredictResult, signal: AbortSignal) => {
+    revokeResultBlobs()
+    setResult(data)
+
+    const isPhoto = data.kind === 'image' || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(data.media_url)
+
+    if (isPhoto) {
+      const photoSrc = mediaUrl(data.media_url)
+      if (!photoSrc) throw new Error('API response missing media_url')
+      setResultMedia(photoSrc)
+      setResultPoster(null)
+      setCsvUrl(null)
+      setTimeline(null)
+    } else {
+      setPhase('saving')
+      let posterSrc: string | null = null
+
+      const jobs: Promise<void>[] = [
+        fetchResultObjectUrl(data.media_url, signal, { tries: 4 }).then((url) => {
+          keepBlob(url)
+          setResultMedia(url)
+        }),
+      ]
+
+      if (data.poster_url && data.poster_url !== data.media_url) {
+        jobs.push(
+          fetchResultObjectUrl(data.poster_url, signal, { tries: 2 })
+            .then((url) => {
+              posterSrc = keepBlob(url)
+              setResultPoster(url)
+            })
+            .catch(() => undefined),
+        )
+      }
+
+      if (data.csv_url) {
+        jobs.push(
+          fetchResultBlob(data.csv_url, signal, { tries: 2 })
+            .then(async (csvBlob) => {
+              setTimeline(parseTimelineCsv(await csvBlob.text()))
+              setCsvUrl(keepBlob(URL.createObjectURL(csvBlob)))
+            })
+            .catch(() => {
+              setCsvUrl(null)
+              setTimeline(null)
+            }),
+        )
+      }
+
+      const results = await Promise.allSettled(jobs)
+      if (results[0]?.status === 'rejected') {
+        if (posterSrc) setResultMedia(posterSrc)
+        else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
+      }
+      setShowVideoPlayer(false)
+    }
+
+    const n = data.summary?.count ?? data.detections.length
+    onToast?.(`Detection complete · ${n} sheep · ${data.elapsed_ms ?? '?'} ms`)
+  }
+
+  const runYoutube = async () => {
+    const url = parseYouTubeUrl(youtubeUrl)
+    if (!url) {
+      onToast?.('Enter a valid YouTube or Shorts link')
+      return
+    }
+    if (running) return
+
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+
+    setRunning(true)
+    setError(null)
+    setResult(null)
+    setResultMedia(null)
+    setResultPoster(null)
+    setCsvUrl(null)
+    setTimeline(null)
+    setVideoFailed(false)
+    setShowVideoPlayer(false)
+    setActiveSample(null)
+    setPhase('sending')
+    setCompressNote('Sending youtube_url to Cloud Run /predict…')
+
+    try {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+      setFile(null)
+      if (inputRef.current) inputRef.current.value = ''
+
+      const data = await predictSheepYoutube(url, {
+        stride: FRAME_INTERVAL,
+        conf: confidence,
+        signal: ac.signal,
+      })
+      setCompressNote(`YouTube · ${url}`)
+      await applyPredictResult(data, ac.signal)
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      const msg = e instanceof Error ? e.message : 'YouTube detection failed'
       setError(msg)
       onToast?.(msg)
     } finally {
@@ -369,14 +431,39 @@ export default function CameraDetection({ onToast }: Props) {
             )}
           </div>
 
-          <div className="mx-3 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:mx-5 sm:mb-5">
-            <p className="text-xs font-bold text-amber-800">YouTube link — not supported on the live site</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
-              YouTube blocks cloud servers, so paste-link analyze is disabled. Download the Shorts/video to your device, then use{' '}
-              <button type="button" onClick={() => inputRef.current?.click()} className="font-bold underline">
-                Upload
+          <div className="mx-3 mb-4 rounded-xl border border-slate-200 bg-slate-soft p-3 sm:mx-5 sm:mb-5">
+            <div className="mb-2 flex items-center gap-2">
+              <Link2 size={14} className="text-green-deep" />
+              <p className="text-xs font-bold text-slate-600">YouTube link</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                inputMode="url"
+                placeholder="https://www.youtube.com/shorts/…"
+                value={youtubeUrl}
+                disabled={running}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void runYoutube()
+                  }
+                }}
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-green-brand"
+              />
+              <button
+                type="button"
+                onClick={() => void runYoutube()}
+                disabled={running || !youtubeUrl.trim()}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-charcoal px-3.5 py-2.5 text-[13px] font-bold text-white transition hover:bg-black disabled:opacity-40"
+              >
+                <Link2 size={15} /> Analyze
               </button>
-              . Analysis always goes as multipart <span className="font-mono">file</span> to <span className="font-mono">POST /predict</span>.
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Sends FormData <span className="font-mono">youtube_url</span> + <span className="font-mono">stride</span> to Cloud Run{' '}
+              <span className="font-mono">POST /predict</span>. If YouTube blocks the API, use Upload instead.
             </p>
           </div>
 
@@ -473,7 +560,7 @@ export default function CameraDetection({ onToast }: Props) {
               </span>
               <div>
                 <p className="text-sm font-bold">Camera Detection</p>
-                <p className="text-xs text-slate-500">Upload file · POST /predict</p>
+                <p className="text-xs text-slate-500">file veya youtube_url · POST /predict</p>
               </div>
             </div>
 
@@ -496,12 +583,41 @@ export default function CameraDetection({ onToast }: Props) {
               <button
                 type="button"
                 onClick={clearMedia}
-                disabled={!file && !running}
+                disabled={!file && !running && !youtubeUrl}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-bold transition hover:border-amber-400 hover:text-amber-700 disabled:opacity-40"
               >
                 <Trash2 size={15} /> Clear
               </button>
             </div>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold text-slate-500">YouTube URL</span>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://youtube.com/shorts/…"
+                  value={youtubeUrl}
+                  disabled={running}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void runYoutube()
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-brand"
+                />
+                <button
+                  type="button"
+                  onClick={() => void runYoutube()}
+                  disabled={running || !youtubeUrl.trim()}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-charcoal px-3 py-2 text-[13px] font-bold text-white transition hover:bg-black disabled:opacity-40"
+                >
+                  <Link2 size={15} /> Analyze
+                </button>
+              </div>
+            </label>
 
             <label className="mt-5 block">
               <div className="flex items-center justify-between text-xs font-semibold">
@@ -529,8 +645,11 @@ export default function CameraDetection({ onToast }: Props) {
 
             <button
               type="button"
-              onClick={() => void runDetection()}
-              disabled={!file || running}
+              onClick={() => {
+                if (file) void runDetection()
+                else if (youtubeUrl.trim()) void runYoutube()
+              }}
+              disabled={(!file && !youtubeUrl.trim()) || running}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-green-brand px-4 py-3 text-sm font-bold text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.9)] transition hover:bg-green-deep disabled:opacity-50"
             >
               {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
@@ -540,7 +659,11 @@ export default function CameraDetection({ onToast }: Props) {
                   : phase === 'saving'
                     ? `Saving result… ${waitSec}s`
                     : `Sending… ${waitSec}s`
-                : 'Run detection'}
+                : file
+                  ? 'Run detection'
+                  : youtubeUrl.trim()
+                    ? 'Analyze YouTube'
+                    : 'Run detection'}
             </button>
 
             {file && (

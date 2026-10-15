@@ -129,31 +129,13 @@ function predictError(status: number, text: string) {
   if (status === 413 || /request entity too large/i.test(plain)) {
     return 'File is too large for the API (~32 MB). 4K videos are compressed automatically — try a shorter clip if this continues.'
   }
+  if (/sign in to confirm|not a bot|youtube download failed/i.test(plain)) {
+    return 'YouTube blocked the API download (bot check). Try another link, or download the clip and use Upload.'
+  }
   return plain.slice(0, 280) || `Predict failed (${status})`
 }
 
-export async function predictSheep(
-  file: File,
-  opts: { stride?: number; conf?: number; signal?: AbortSignal } = {},
-): Promise<PredictResult> {
-  const stride = opts.stride ?? FRAME_INTERVAL
-  const fd = new FormData()
-  fd.append('file', file)
-  fd.append('stride', String(stride))
-  if (opts.conf != null) fd.append('conf', String(opts.conf))
-  // Do not append youtube_url — Vercel → Cloud Run must be a file upload.
-
-  const res = await fetch(`${SHEEP_API}/predict`, {
-    method: 'POST',
-    body: fd,
-    signal: opts.signal,
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(predictError(res.status, text))
-  }
-
-  const raw = (await res.json()) as Record<string, unknown>
+function parsePredictJson(raw: Record<string, unknown>): PredictResult {
   const media_url = pickString(raw, ['media_url', 'mediaUrl', 'video_url', 'videoUrl', 'output_url', 'url'])
   const poster_url = pickString(raw, ['poster_url', 'posterUrl', 'thumbnail_url', 'thumbnailUrl', 'poster'])
   const csv_url = pickString(raw, ['csv_url', 'csvUrl', 'timeline_url', 'timelineUrl'])
@@ -182,6 +164,71 @@ export async function predictSheep(
     note: typeof raw.note === 'string' ? raw.note : undefined,
     raw,
   }
+}
+
+async function postPredict(fd: FormData, signal?: AbortSignal): Promise<PredictResult> {
+  const res = await fetch(`${SHEEP_API}/predict`, {
+    method: 'POST',
+    body: fd,
+    signal,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(predictError(res.status, text))
+  }
+  return parsePredictJson((await res.json()) as Record<string, unknown>)
+}
+
+export async function predictSheep(
+  file: File,
+  opts: { stride?: number; conf?: number; signal?: AbortSignal } = {},
+): Promise<PredictResult> {
+  const stride = opts.stride ?? FRAME_INTERVAL
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('stride', String(stride))
+  if (opts.conf != null) fd.append('conf', String(opts.conf))
+  return postPredict(fd, opts.signal)
+}
+
+/** Cloud Run downloads the YouTube / Shorts URL itself via FormData `youtube_url`. */
+export async function predictSheepYoutube(
+  youtubeUrl: string,
+  opts: { stride?: number; conf?: number; signal?: AbortSignal } = {},
+): Promise<PredictResult> {
+  const url = youtubeUrl.trim()
+  if (!url) throw new Error('Enter a valid YouTube or Shorts link')
+
+  const stride = opts.stride ?? FRAME_INTERVAL
+  const fd = new FormData()
+  fd.append('youtube_url', url)
+  fd.append('stride', String(stride))
+  if (opts.conf != null) fd.append('conf', String(opts.conf))
+  return postPredict(fd, opts.signal)
+}
+
+export function parseYouTubeUrl(raw: string): string | null {
+  const text = raw.trim()
+  if (!text) return null
+  try {
+    const u = new URL(text)
+    const host = u.hostname.replace(/^www\./, '').toLowerCase()
+    if (host === 'youtu.be') {
+      const id = u.pathname.split('/').filter(Boolean)[0]
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? text : null
+    }
+    if (
+      host === 'youtube.com' ||
+      host === 'm.youtube.com' ||
+      host === 'music.youtube.com' ||
+      host === 'youtube-nocookie.com'
+    ) {
+      return text
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 export type TimelinePoint = {
