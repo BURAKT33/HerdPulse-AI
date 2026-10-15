@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Download, ImagePlus, Link2, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
+import { Camera, Download, ImagePlus, Loader2, Play, Trash2, Upload, Video } from 'lucide-react'
 import { Card, CardHead } from './DashShell'
 import { FRAME_INTERVAL, fetchResultBlob, fetchResultObjectUrl, mediaUrl, parseTimelineCsv, predictSheep, type PredictResult, type Timeline } from '../lib/vision'
 import { detectKind, formatBytes, isImageFile, isVideoFile, prepareForUpload } from '../lib/compress'
-import { parseYouTubeId, predictYouTube } from '../lib/youtube'
 import SheepTimeline from './SheepTimeline'
 
 const SAMPLES = [
@@ -39,10 +38,9 @@ export default function CameraDetection({ onToast }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [videoFailed, setVideoFailed] = useState(false)
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
-  const [phase, setPhase] = useState<'idle' | 'fetching' | 'compressing' | 'sending' | 'saving'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'compressing' | 'sending' | 'saving'>('idle')
   const [compressNote, setCompressNote] = useState<string | null>(null)
   const [activeSample, setActiveSample] = useState<string | null>(null)
-  const [youtubeUrl, setYoutubeUrl] = useState('')
 
   const isVideo = file ? isVideoFile(file) : false
   const isImage = file ? isImageFile(file) : false
@@ -98,7 +96,6 @@ export default function CameraDetection({ onToast }: Props) {
     setPhase('idle')
     setCompressNote(null)
     setActiveSample(null)
-    setYoutubeUrl('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -248,114 +245,6 @@ export default function CameraDetection({ onToast }: Props) {
     }
   }
 
-  const runYoutube = async () => {
-    const url = youtubeUrl.trim()
-    if (!parseYouTubeId(url)) {
-      onToast?.('Enter a valid YouTube or Shorts link')
-      return
-    }
-    if (running) return
-
-    abortRef.current?.abort()
-    const ac = new AbortController()
-    abortRef.current = ac
-    setRunning(true)
-    setPhase('fetching')
-    setError(null)
-    setResult(null)
-    setResultMedia(null)
-    setResultPoster(null)
-    setCsvUrl(null)
-    setTimeline(null)
-    setVideoFailed(false)
-    setShowVideoPlayer(false)
-    setActiveSample(null)
-    setCompressNote('Downloading YouTube as a file, then sending to /predict…')
-
-    try {
-      setPhase('sending')
-      const data = await predictYouTube(url, {
-        stride: FRAME_INTERVAL,
-        conf: confidence,
-        signal: ac.signal,
-      })
-
-      const sourceName = data._source?.name || 'youtube.mp4'
-      const sourceBytes = data._source?.bytes || 0
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
-      revokeResultBlobs()
-      setFile(new File([new Uint8Array(0)], sourceName, { type: 'video/mp4' }))
-      setPreviewUrl(null)
-      setCompressNote(
-        sourceBytes > 0
-          ? `YouTube file ${formatBytes(sourceBytes)} · sent as multipart file (not as a URL)`
-          : 'YouTube clip sent as multipart file (not as a URL)',
-      )
-
-      setResult(data)
-      const isPhoto = data.kind === 'image' || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(data.media_url)
-
-      if (isPhoto) {
-        const photoSrc = mediaUrl(data.media_url)
-        if (!photoSrc) throw new Error('API response missing media_url')
-        setResultMedia(photoSrc)
-        setResultPoster(null)
-      } else {
-        setPhase('saving')
-        let posterSrc: string | null = null
-        const jobs: Promise<void>[] = [
-          fetchResultObjectUrl(data.media_url, ac.signal, { tries: 4 }).then((u) => {
-            keepBlob(u)
-            setResultMedia(u)
-          }),
-        ]
-        if (data.poster_url && data.poster_url !== data.media_url) {
-          jobs.push(
-            fetchResultObjectUrl(data.poster_url, ac.signal, { tries: 2 })
-              .then((u) => {
-                posterSrc = keepBlob(u)
-                setResultPoster(u)
-              })
-              .catch(() => undefined),
-          )
-        }
-        if (data.csv_url) {
-          jobs.push(
-            fetchResultBlob(data.csv_url, ac.signal, { tries: 2 })
-              .then(async (csvBlob) => {
-                setTimeline(parseTimelineCsv(await csvBlob.text()))
-                setCsvUrl(keepBlob(URL.createObjectURL(csvBlob)))
-              })
-              .catch(() => {
-                setCsvUrl(null)
-                setTimeline(null)
-              }),
-          )
-        }
-        const results = await Promise.allSettled(jobs)
-        if (results[0]?.status === 'rejected') {
-          if (posterSrc) setResultMedia(posterSrc)
-          else throw new Error('Annotated video expired on the API before it could be saved. Run detection again.')
-        }
-        setShowVideoPlayer(false)
-      }
-
-      const count = data.summary?.count ?? data.detections.length
-      onToast?.(`Detection complete · ${count} sheep · ${data.elapsed_ms ?? '?'} ms`)
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return
-      const raw = e instanceof Error ? e.message : 'YouTube download failed'
-      const msg = /bot|blocked|422|no downloadable/i.test(raw)
-        ? 'YouTube blocked the cloud download. Save the Shorts/video to your device and use Upload.'
-        : raw
-      setError(msg)
-      onToast?.(msg)
-    } finally {
-      setRunning(false)
-      setPhase('idle')
-    }
-  }
-
   const runSample = async (sample: (typeof SAMPLES)[number]) => {
     if (running) return
     try {
@@ -383,34 +272,6 @@ export default function CameraDetection({ onToast }: Props) {
     resultIsImage
       ? resultMedia
       : resultPoster || (videoFailed || !showVideoPlayer ? resultPoster : null)
-
-  const renderYoutubeField = (inputClass = 'bg-white') => (
-    <div className="flex gap-2">
-      <input
-        type="url"
-        inputMode="url"
-        placeholder="https://youtu.be/… or Shorts"
-        value={youtubeUrl}
-        disabled={running}
-        onChange={(e) => setYoutubeUrl(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            void runYoutube()
-          }
-        }}
-        className={`min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-green-brand ${inputClass}`}
-      />
-      <button
-        type="button"
-        onClick={() => void runYoutube()}
-        disabled={running || !youtubeUrl.trim()}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-charcoal px-3.5 py-2.5 text-[13px] font-bold text-white transition hover:bg-black disabled:opacity-40"
-      >
-        <Link2 size={15} /> Load
-      </button>
-    </div>
-  )
 
   return (
     <div className="space-y-4">
@@ -440,22 +301,17 @@ export default function CameraDetection({ onToast }: Props) {
             }}
           >
             {!file && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-slate-400 sm:px-8">
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="flex flex-col items-center gap-3 transition hover:text-white"
-                >
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-green-brand">
-                    <Upload size={26} />
-                  </span>
-                  <span className="text-sm font-bold text-white">Drop photo or video</span>
-                </button>
-                <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-                  {renderYoutubeField('border-white/20 bg-white/95')}
-                </div>
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-400 transition hover:bg-white/5 hover:text-white"
+              >
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-green-brand">
+                  <Upload size={26} />
+                </span>
+                <span className="text-sm font-bold text-white">Drop photo or video</span>
                 <span className="text-xs text-slate-400">or click a sample barn frame below</span>
-              </div>
+              </button>
             )}
 
             {file && !resultMedia && previewUrl && (
@@ -507,20 +363,20 @@ export default function CameraDetection({ onToast }: Props) {
             {(running || resultMedia) && (
               <div className="glass-dark absolute left-3 top-3 rounded-lg px-3 py-2 font-mono text-[11px] text-green-brand">
                 {running
-                  ? `● ${phase === 'fetching' ? 'FETCHING YOUTUBE' : phase === 'compressing' ? 'COMPRESSING' : phase === 'saving' ? 'SAVING RESULT' : 'SENDING'} · ${waitSec}s`
+                  ? `● ${phase === 'compressing' ? 'COMPRESSING' : phase === 'saving' ? 'SAVING RESULT' : 'SENDING'} · ${waitSec}s`
                   : `● DONE · ${count} detected · conf ${(confidence * 100).toFixed(0)}%`}
               </div>
             )}
           </div>
 
-          <div className="mx-3 mb-4 rounded-xl border border-slate-200 bg-slate-soft p-3 sm:mx-5 sm:mb-5">
-            <div className="mb-2 flex items-center gap-2">
-              <Link2 size={14} className="text-green-deep" />
-              <p className="text-xs font-bold text-slate-600">YouTube link</p>
-            </div>
-            {renderYoutubeField()}
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              Live site: YouTube often blocks cloud IPs — download the clip and use Upload. Link → file works on local Wi‑Fi.
+          <div className="mx-3 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:mx-5 sm:mb-5">
+            <p className="text-xs font-bold text-amber-800">YouTube link — not supported on the live site</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+              YouTube blocks cloud servers, so paste-link analyze is disabled. Download the Shorts/video to your device, then use{' '}
+              <button type="button" onClick={() => inputRef.current?.click()} className="font-bold underline">
+                Upload
+              </button>
+              . Analysis always goes as multipart <span className="font-mono">file</span> to <span className="font-mono">POST /predict</span>.
             </p>
           </div>
 
@@ -616,8 +472,8 @@ export default function CameraDetection({ onToast }: Props) {
                 <Camera size={18} />
               </span>
               <div>
-                <p className="text-sm font-bold">Camera Detection!</p>
-                <p className="text-xs text-slate-500">snn-sheep-api · /predict</p>
+                <p className="text-sm font-bold">Camera Detection</p>
+                <p className="text-xs text-slate-500">Upload file · POST /predict</p>
               </div>
             </div>
 
@@ -640,17 +496,12 @@ export default function CameraDetection({ onToast }: Props) {
               <button
                 type="button"
                 onClick={clearMedia}
-                disabled={!file && !running && !youtubeUrl}
+                disabled={!file && !running}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-bold transition hover:border-amber-400 hover:text-amber-700 disabled:opacity-40"
               >
                 <Trash2 size={15} /> Clear
               </button>
             </div>
-
-            <label className="mt-4 block">
-              <span className="text-xs font-semibold text-slate-500">YouTube link</span>
-              <div className="mt-1.5">{renderYoutubeField()}</div>
-            </label>
 
             <label className="mt-5 block">
               <div className="flex items-center justify-between text-xs font-semibold">
@@ -684,13 +535,11 @@ export default function CameraDetection({ onToast }: Props) {
             >
               {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {running
-                ? phase === 'fetching'
-                  ? `Fetching YouTube… ${waitSec}s`
-                  : phase === 'compressing'
-                    ? `Compressing… ${waitSec}s`
-                    : phase === 'saving'
-                      ? `Saving result… ${waitSec}s`
-                      : `Sending… ${waitSec}s`
+                ? phase === 'compressing'
+                  ? `Compressing… ${waitSec}s`
+                  : phase === 'saving'
+                    ? `Saving result… ${waitSec}s`
+                    : `Sending… ${waitSec}s`
                 : 'Run detection'}
             </button>
 
