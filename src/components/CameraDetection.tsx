@@ -462,8 +462,8 @@ export default function CameraDetection({ onToast }: Props) {
               </button>
             </div>
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Sends FormData <span className="font-mono">youtube_url</span> + <span className="font-mono">stride</span> to Cloud Run{' '}
-              <span className="font-mono">POST /predict</span>. If YouTube blocks the API, use Upload instead.
+              Direct <span className="font-mono">POST</span> to Cloud Run with <span className="font-mono">youtube_url</span> +{' '}
+              <span className="font-mono">stride</span>. If YouTube blocks the API, use Upload instead.
             </p>
           </div>
 

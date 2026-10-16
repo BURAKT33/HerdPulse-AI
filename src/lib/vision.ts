@@ -191,7 +191,7 @@ export async function predictSheep(
   return postPredict(fd, opts.signal)
 }
 
-/** Cloud Run downloads the YouTube / Shorts URL itself via FormData `youtube_url`. */
+/** Direct Cloud Run call: FormData `youtube_url` + `stride` (no file, no proxy). */
 export async function predictSheepYoutube(
   youtubeUrl: string,
   opts: { stride?: number; conf?: number; signal?: AbortSignal } = {},
@@ -199,12 +199,22 @@ export async function predictSheepYoutube(
   const url = youtubeUrl.trim()
   if (!url) throw new Error('Enter a valid YouTube or Shorts link')
 
-  const stride = opts.stride ?? FRAME_INTERVAL
+  const API = SHEEP_API_ORIGIN
   const fd = new FormData()
   fd.append('youtube_url', url)
-  fd.append('stride', String(stride))
+  fd.append('stride', String(opts.stride ?? FRAME_INTERVAL))
   if (opts.conf != null) fd.append('conf', String(opts.conf))
-  return postPredict(fd, opts.signal)
+
+  const res = await fetch(`${API}/predict`, {
+    method: 'POST',
+    body: fd,
+    signal: opts.signal,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(predictError(res.status, text))
+  }
+  return parsePredictJson((await res.json()) as Record<string, unknown>)
 }
 
 export function parseYouTubeUrl(raw: string): string | null {
