@@ -2,8 +2,8 @@
 export const SHEEP_API = '/sheep-api'
 export const SHEEP_API_ORIGIN = 'https://snn-sheep-api-2txzd5xoia-ew.a.run.app'
 
-/** Video frame stride sent as FormData `stride`. API default is 5. */
-export const FRAME_INTERVAL = 5 as const
+/** Video frame stride sent as FormData `stride`. Every frame is analysed. */
+export const FRAME_INTERVAL = 1 as const
 
 export type SheepDetection = {
   class?: string

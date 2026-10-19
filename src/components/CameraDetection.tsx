@@ -640,7 +640,7 @@ export default function CameraDetection({ onToast }: Props) {
                 <span className="font-semibold text-slate-500">stride</span>
                 <span className="font-mono font-bold tabular-nums text-charcoal">{FRAME_INTERVAL}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Fixed at 5 for video — every 5th frame is analysed.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Fixed at 1 for video — every frame is analysed.</p>
             </div>
 
             <button
